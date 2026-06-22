@@ -1,20 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BigHeader } from '../components/Header';
 import { EmptyState, LoadingState } from '../components/States';
 import { TrackList } from '../components/TrackList';
-import type { RootStackParamList } from '../navigation/types';
 import { useLibraryStore } from '../store/libraryStore';
 import { usePlayerStore } from '../store/playerStore';
 import { colors, radius, spacing } from '../theme';
 import { MINI_PLAYER_HEIGHT } from '../components/MiniPlayer';
 
 export function SongsScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const tracks = useLibraryStore((s) => s.tracks);
   const status = useLibraryStore((s) => s.status);
   const load = useLibraryStore((s) => s.load);
@@ -55,7 +51,6 @@ export function SongsScreen() {
       <TrackList
         tracks={tracks}
         onPressTrack={(index) => playFrom(tracks, index)}
-        onTrackMenu={(track) => navigation.navigate('AddToPlaylist', { trackIds: [track.id] })}
         bottomPadding={MINI_PLAYER_HEIGHT + spacing.xxl}
         ListHeaderComponent={
           <View>

@@ -146,7 +146,7 @@ export function NowPlayingScreen() {
             />
           </Pressable>
 
-          <Pressable hitSlop={8} onPress={() => next(false)}>
+          <Pressable hitSlop={8} onPress={() => next()}>
             <Ionicons name="play-skip-forward" size={34} color={colors.text} />
           </Pressable>
 

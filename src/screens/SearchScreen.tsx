@@ -1,6 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,13 +6,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '../components/States';
 import { MINI_PLAYER_HEIGHT } from '../components/MiniPlayer';
 import { TrackList } from '../components/TrackList';
-import type { RootStackParamList } from '../navigation/types';
 import { useLibraryStore } from '../store/libraryStore';
 import { usePlayerStore } from '../store/playerStore';
 import { colors, radius, spacing } from '../theme';
 
 export function SearchScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const tracks = useLibraryStore((s) => s.tracks);
   const playFrom = usePlayerStore((s) => s.playFrom);
   const [query, setQuery] = useState('');
@@ -52,7 +48,6 @@ export function SearchScreen() {
         <TrackList
           tracks={results}
           onPressTrack={(index) => playFrom(results, index)}
-          onTrackMenu={(track) => navigation.navigate('AddToPlaylist', { trackIds: [track.id] })}
           bottomPadding={MINI_PLAYER_HEIGHT + spacing.xxl}
           ListHeaderComponent={
             <Text style={styles.count}>

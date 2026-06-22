@@ -51,7 +51,7 @@ export function MiniPlayer() {
             color={colors.text}
           />
         </Pressable>
-        <Pressable hitSlop={10} onPress={() => next(false)} style={styles.control}>
+        <Pressable hitSlop={10} onPress={() => next()} style={styles.control}>
           <Ionicons name="play-skip-forward" size={20} color={colors.text} />
         </Pressable>
       </Pressable>

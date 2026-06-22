@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useRoute, type RouteProp } from '@react-navigation/native';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,7 +31,6 @@ const CONFIG: Record<
 };
 
 export function SmartPlaylistScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { params } = useRoute<RouteProp<RootStackParamList, 'SmartPlaylist'>>();
   const kind = params.kind;
   const cfg = CONFIG[kind];
@@ -62,7 +60,6 @@ export function SmartPlaylistScreen() {
       <TrackList
         tracks={tracks}
         onPressTrack={(index) => playFrom(tracks, index)}
-        onTrackMenu={(track) => navigation.navigate('AddToPlaylist', { trackIds: [track.id] })}
         bottomPadding={MINI_PLAYER_HEIGHT + spacing.xxl}
         ListHeaderComponent={
           <View style={styles.hero}>

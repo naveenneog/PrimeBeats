@@ -1,8 +1,11 @@
-import {
-  createAudioPlayer,
-  setAudioModeAsync,
-  type AudioStatus,
-} from 'expo-audio';
+import TrackPlayer, {
+  AppKilledPlaybackBehavior,
+  Capability,
+  Event,
+  RepeatMode as TPRepeatMode,
+  State,
+  type AddTrack,
+} from 'react-native-track-player';
 import { create } from 'zustand';
 
 import { recommendNext } from '../ml/recommender';
@@ -11,21 +14,64 @@ import { useLibraryStore } from './libraryStore';
 import { useTasteStore } from './tasteStore';
 
 /**
- * A single, app-wide AudioPlayer that lives for the entire process lifetime.
- * Background playback on Android requires `setActiveForLockScreen`, which is
- * only available on a player (not on AudioPlaylist), so we manage the queue
- * ourselves and drive a single player.
+ * Playback is driven by react-native-track-player (RNTP), which owns a native
+ * queue and a Media3 media session — this is what gives us working lock-screen /
+ * notification **next & previous** controls (expo-audio deliberately disables
+ * those). We mirror RNTP's queue into this store so the UI and the Smart Radio
+ * recommender can reason about it, and we drive the engine through RNTP calls.
  */
-const player = createAudioPlayer(null, { updateInterval: 500 });
 
-/** Guards against `didJustFinish` firing multiple times for one track end. */
-let advancing = false;
-/** Ensures the native status listener is only attached once. */
-let listenerAttached = false;
+let setupDone = false;
+let listenersAttached = false;
+/**
+ * True while we programmatically rebuild the native queue (reset/add/skip).
+ * During a rebuild RNTP emits `PlaybackActiveTrackChanged` events that refer to
+ * the OLD queue, so we suppress feedback/index handling here and instead record
+ * the outgoing track explicitly + set the new index optimistically in the action.
+ */
+let rebuilding = false;
+let rebuildTimer: ReturnType<typeof setTimeout> | undefined;
+
+function beginRebuild(): void {
+  rebuilding = true;
+  if (rebuildTimer) clearTimeout(rebuildTimer);
+}
+
+function endRebuild(): void {
+  if (rebuildTimer) clearTimeout(rebuildTimer);
+  // Release after the reset/add/skip event burst has settled.
+  rebuildTimer = setTimeout(() => {
+    rebuilding = false;
+  }, 500);
+}
+
+/** Records implicit feedback for the currently-playing track before leaving it. */
+function recordLeavingCurrent(): void {
+  const { queue, currentIndex, positionSec, durationSec } = usePlayerStore.getState();
+  const track = queue[currentIndex];
+  if (!track) return;
+  const dur = durationSec || track.durationMs / 1000;
+  const completed = dur > 0 && positionSec >= dur - 2;
+  useTasteStore.getState().recordPlay(track, { completed, playedSec: positionSec, durationSec: dur });
+}
+
+/** Maps our domain Track to an RNTP track (extra `id` is preserved by RNTP). */
+function toRNTPTrack(t: Track): AddTrack {
+  return {
+    id: t.id,
+    url: t.uri,
+    title: t.title,
+    artist: t.artist,
+    album: t.album,
+    duration: t.durationMs > 0 ? t.durationMs / 1000 : undefined,
+  };
+}
 
 type PlayerState = {
+  /** Whether RNTP has finished setup and is ready to accept commands. */
+  ready: boolean;
   queue: Track[];
-  /** The pre-shuffle ordering, used to restore order when shuffle is toggled off. */
+  /** Pre-shuffle ordering, used to restore order when shuffle is toggled off. */
   baseQueue: Track[];
   currentIndex: number;
   isPlaying: boolean;
@@ -38,18 +84,15 @@ type PlayerState = {
   radioMode: boolean;
 
   playFrom: (tracks: Track[], index: number) => void;
-  /** Starts an endless, taste-aware "radio" seeded from a track (or current). */
   startRadio: (seed?: Track) => void;
   play: () => void;
   pause: () => void;
   togglePlay: () => void;
-  next: (auto?: boolean) => void;
+  next: () => void;
   previous: () => void;
   seekTo: (sec: number) => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
-  /** Records implicit feedback for the current track as the user leaves it. */
-  logLeaving: (completed: boolean) => void;
   stop: () => void;
 };
 
@@ -62,248 +105,281 @@ function shuffleWithCurrentFirst(tracks: Track[], current: Track): Track[] {
   return [current, ...rest];
 }
 
-export const usePlayerStore = create<PlayerState>((set, get) => {
-  /** In radio mode, append more recommendations as the queue nears its end. */
-  function maybeExtendRadio() {
-    const { radioMode, queue, currentIndex } = get();
-    if (!radioMode || queue.length - currentIndex > 3) return;
-    const library = useLibraryStore.getState().tracks;
-    if (library.length === 0) return;
-    const seed = queue[currentIndex] ?? queue[queue.length - 1];
-    if (!seed) return;
-    const exclude = new Set(queue.map((t) => t.id));
-    const more = recommendNext(library, useTasteStore.getState().profile, {
-      seed,
-      exclude,
-      count: 15,
-    });
-    if (more.length) {
-      set({ queue: [...queue, ...more], baseQueue: [...get().baseQueue, ...more] });
-    }
-  }
+export const usePlayerStore = create<PlayerState>((set, get) => ({
+  ready: false,
+  queue: [],
+  baseQueue: [],
+  currentIndex: -1,
+  isPlaying: false,
+  isBuffering: false,
+  positionSec: 0,
+  durationSec: 0,
+  shuffle: false,
+  repeat: 'off',
+  radioMode: false,
 
-  function loadTrackAt(index: number, autoplay: boolean) {
-    const { queue } = get();
-    const track = queue[index];
-    if (!track) return;
-
-    player.replace({ uri: track.uri });
-    player.setActiveForLockScreen(true, {
-      title: track.title,
-      artist: track.artist,
-      albumTitle: track.album,
-    });
-
-    set({
-      currentIndex: index,
-      positionSec: 0,
-      durationSec: track.durationMs > 0 ? track.durationMs / 1000 : 0,
-    });
-
-    if (autoplay) player.play();
-    maybeExtendRadio();
-  }
-
-  return {
-    queue: [],
-    baseQueue: [],
-    currentIndex: -1,
-    isPlaying: false,
-    isBuffering: false,
-    positionSec: 0,
-    durationSec: 0,
-    shuffle: false,
-    repeat: 'off',
-    radioMode: false,
-
-    playFrom: (tracks, index) => {
-      if (tracks.length === 0) return;
-      if (get().currentIndex >= 0) get().logLeaving(false);
-      const chosen = tracks[Math.max(0, Math.min(index, tracks.length - 1))];
-      if (get().shuffle) {
-        const shuffled = shuffleWithCurrentFirst(tracks, chosen);
-        set({ baseQueue: tracks, queue: shuffled, radioMode: false });
-        loadTrackAt(0, true);
-      } else {
-        set({ baseQueue: tracks, queue: tracks, radioMode: false });
-        loadTrackAt(tracks.indexOf(chosen), true);
-      }
-    },
-
-    startRadio: (seedTrack) => {
-      const library = useLibraryStore.getState().tracks;
-      if (library.length === 0) return;
-      if (get().currentIndex >= 0) get().logLeaving(false);
-      const seed =
-        seedTrack ??
-        get().queue[get().currentIndex] ??
-        library[Math.floor(Math.random() * library.length)];
-      const recs = recommendNext(library, useTasteStore.getState().profile, {
-        seed,
-        exclude: new Set([seed.id]),
-        count: 30,
-      });
-      const queue = [seed, ...recs];
-      set({ baseQueue: queue, queue, radioMode: true, shuffle: false });
-      loadTrackAt(0, true);
-    },
-
-    play: () => {
-      if (get().currentIndex < 0) return;
-      player.play();
-    },
-
-    pause: () => player.pause(),
-
-    togglePlay: () => {
-      if (get().currentIndex < 0) return;
-      if (get().isPlaying) player.pause();
-      else player.play();
-    },
-
-    next: (auto = false) => {
-      if (advancing && !auto) return;
-      const { queue, currentIndex, repeat } = get();
-      if (queue.length === 0) return;
-
-      if (repeat === 'one' && auto) {
-        void player.seekTo(0);
-        player.play();
-        return;
-      }
-
-      let nextIndex = currentIndex + 1;
-      if (nextIndex >= queue.length) {
-        if (repeat === 'all') {
-          nextIndex = 0;
-        } else if (auto) {
-          // Reached the end naturally with no repeat: stop.
-          player.pause();
-          void player.seekTo(0);
-          set({ isPlaying: false });
-          return;
-        } else {
-          // Manual next at the end with no repeat: stay put.
-          return;
-        }
-      }
-      if (!auto) get().logLeaving(false);
-      loadTrackAt(nextIndex, true);
-    },
-
-    previous: () => {
-      const { queue, currentIndex, positionSec, repeat } = get();
-      if (queue.length === 0) return;
-      if (positionSec > 3) {
-        void player.seekTo(0);
-        return;
-      }
-      let prevIndex = currentIndex - 1;
-      if (prevIndex < 0) {
-        if (repeat === 'all') prevIndex = queue.length - 1;
-        else {
-          void player.seekTo(0);
-          return;
-        }
-      }
-      get().logLeaving(false);
-      loadTrackAt(prevIndex, true);
-    },
-
-    seekTo: (sec) => {
-      void player.seekTo(Math.max(0, sec));
-      set({ positionSec: Math.max(0, sec) });
-    },
-
-    toggleShuffle: () => {
-      const { shuffle, queue, baseQueue, currentIndex } = get();
-      const current = queue[currentIndex];
-      if (!shuffle) {
-        // Turning shuffle ON.
-        if (current) {
-          const shuffled = shuffleWithCurrentFirst(baseQueue.length ? baseQueue : queue, current);
-          set({ shuffle: true, queue: shuffled, currentIndex: 0 });
-        } else {
-          set({ shuffle: true });
-        }
-      } else {
-        // Turning shuffle OFF: restore base order.
-        const restored = baseQueue.length ? baseQueue : queue;
-        const idx = current ? restored.findIndex((t) => t.id === current.id) : -1;
-        set({ shuffle: false, queue: restored, currentIndex: idx >= 0 ? idx : get().currentIndex });
-      }
-    },
-
-    cycleRepeat: () => {
-      const order: RepeatMode[] = ['off', 'all', 'one'];
-      const nextMode = order[(order.indexOf(get().repeat) + 1) % order.length];
-      set({ repeat: nextMode });
-    },
-
-    logLeaving: (completed) => {
-      const { queue, currentIndex, positionSec, durationSec } = get();
-      const track = queue[currentIndex];
-      if (!track) return;
-      useTasteStore.getState().recordPlay(track, {
-        completed,
-        playedSec: positionSec,
-        durationSec: durationSec || track.durationMs / 1000,
-      });
-    },
-
-    stop: () => {
-      player.pause();
-      void player.seekTo(0);
-      set({ isPlaying: false, positionSec: 0 });
-    },
-  };
-});
+  playFrom: (tracks, index) => {
+    void doPlayFrom(tracks, index);
+  },
+  startRadio: (seed) => {
+    void doStartRadio(seed);
+  },
+  play: () => {
+    void TrackPlayer.play();
+  },
+  pause: () => {
+    void TrackPlayer.pause();
+  },
+  togglePlay: () => {
+    if (get().isPlaying) void TrackPlayer.pause();
+    else void TrackPlayer.play();
+  },
+  next: () => {
+    void TrackPlayer.skipToNext().catch(() => undefined);
+  },
+  previous: () => {
+    void doPrevious();
+  },
+  seekTo: (sec) => {
+    const pos = Math.max(0, sec);
+    void TrackPlayer.seekTo(pos);
+    set({ positionSec: pos });
+  },
+  toggleShuffle: () => {
+    void doToggleShuffle();
+  },
+  cycleRepeat: () => {
+    void doCycleRepeat();
+  },
+  stop: () => {
+    void TrackPlayer.reset();
+    set({ isPlaying: false, positionSec: 0, queue: [], baseQueue: [], currentIndex: -1, radioMode: false });
+  },
+}));
 
 /** Selector helper: the currently active track, or null. */
 export function selectCurrentTrack(state: PlayerState): Track | null {
   return state.currentIndex >= 0 ? state.queue[state.currentIndex] ?? null : null;
 }
 
-// Attach the native status listener exactly once.
-if (!listenerAttached) {
-  listenerAttached = true;
-  player.addListener('playbackStatusUpdate', (status: AudioStatus) => {
-    const prev = usePlayerStore.getState();
-    usePlayerStore.setState({
-      isPlaying: status.playing,
-      isBuffering: status.isBuffering,
-      positionSec: status.currentTime ?? 0,
-      durationSec:
-        status.duration && status.duration > 0 ? status.duration : prev.durationSec,
-    });
+async function doPlayFrom(tracks: Track[], index: number): Promise<void> {
+  if (tracks.length === 0 || !usePlayerStore.getState().ready) return;
+  const chosen = tracks[Math.max(0, Math.min(index, tracks.length - 1))];
+  const shuffle = usePlayerStore.getState().shuffle;
+  const queue = shuffle ? shuffleWithCurrentFirst(tracks, chosen) : tracks;
+  const startIndex = shuffle ? 0 : queue.indexOf(chosen);
+  recordLeavingCurrent();
+  beginRebuild();
+  try {
+    usePlayerStore.setState({ baseQueue: tracks, queue, radioMode: false, currentIndex: startIndex });
+    await TrackPlayer.reset();
+    await TrackPlayer.add(queue.map(toRNTPTrack));
+    if (startIndex > 0) await TrackPlayer.skip(startIndex);
+    await TrackPlayer.play();
+  } finally {
+    endRebuild();
+  }
+}
 
-    if (status.didJustFinish && !advancing) {
-      advancing = true;
-      try {
-        usePlayerStore.getState().logLeaving(true);
-        usePlayerStore.getState().next(true);
-      } finally {
-        // Release on the next tick so a single end-of-track only advances once.
-        setTimeout(() => {
-          advancing = false;
-        }, 250);
-      }
+async function doStartRadio(seedTrack?: Track): Promise<void> {
+  const library = useLibraryStore.getState().tracks;
+  if (library.length === 0 || !usePlayerStore.getState().ready) return;
+  const state = usePlayerStore.getState();
+  const seed =
+    seedTrack ?? state.queue[state.currentIndex] ?? library[Math.floor(Math.random() * library.length)];
+  const recs = recommendNext(library, useTasteStore.getState().profile, {
+    seed,
+    exclude: new Set([seed.id]),
+    count: 30,
+  });
+  const queue = [seed, ...recs];
+  recordLeavingCurrent();
+  beginRebuild();
+  try {
+    usePlayerStore.setState({ baseQueue: queue, queue, radioMode: true, shuffle: false, currentIndex: 0 });
+    await TrackPlayer.reset();
+    await TrackPlayer.add(queue.map(toRNTPTrack));
+    await TrackPlayer.play();
+  } finally {
+    endRebuild();
+  }
+}
+
+async function doPrevious(): Promise<void> {
+  if (usePlayerStore.getState().positionSec > 3) {
+    await TrackPlayer.seekTo(0);
+    return;
+  }
+  try {
+    await TrackPlayer.skipToPrevious();
+  } catch {
+    await TrackPlayer.seekTo(0);
+  }
+}
+
+async function doToggleShuffle(): Promise<void> {
+  const { shuffle, queue, baseQueue, currentIndex, isPlaying, positionSec } = usePlayerStore.getState();
+  const current = queue[currentIndex];
+
+  let newQueue: Track[];
+  let newIndex: number;
+  if (!shuffle) {
+    if (!current) {
+      usePlayerStore.setState({ shuffle: true });
+      return;
+    }
+    newQueue = shuffleWithCurrentFirst(baseQueue.length ? baseQueue : queue, current);
+    newIndex = 0;
+  } else {
+    newQueue = baseQueue.length ? baseQueue : queue;
+    newIndex = current ? newQueue.findIndex((t) => t.id === current.id) : currentIndex;
+    if (newIndex < 0) newIndex = Math.max(0, currentIndex);
+  }
+
+  beginRebuild();
+  try {
+    usePlayerStore.setState({ shuffle: !shuffle, queue: newQueue, currentIndex: newIndex });
+    await TrackPlayer.reset();
+    await TrackPlayer.add(newQueue.map(toRNTPTrack));
+    if (newIndex > 0) await TrackPlayer.skip(newIndex);
+    if (positionSec > 0) await TrackPlayer.seekTo(positionSec);
+    if (isPlaying) await TrackPlayer.play();
+  } finally {
+    endRebuild();
+  }
+}
+
+async function doCycleRepeat(): Promise<void> {
+  const order: RepeatMode[] = ['off', 'all', 'one'];
+  const nextMode = order[(order.indexOf(usePlayerStore.getState().repeat) + 1) % order.length];
+  usePlayerStore.setState({ repeat: nextMode });
+  const tpMode =
+    nextMode === 'one' ? TPRepeatMode.Track : nextMode === 'all' ? TPRepeatMode.Queue : TPRepeatMode.Off;
+  await TrackPlayer.setRepeatMode(tpMode);
+}
+
+/** In radio mode, append more recommendations as the queue nears its end. */
+async function maybeExtendRadio(): Promise<void> {
+  const { radioMode, queue, currentIndex } = usePlayerStore.getState();
+  if (!radioMode || queue.length - currentIndex > 3) return;
+  const library = useLibraryStore.getState().tracks;
+  if (library.length === 0) return;
+  const seed = queue[currentIndex] ?? queue[queue.length - 1];
+  if (!seed) return;
+  const exclude = new Set(queue.map((t) => t.id));
+  const more = recommendNext(library, useTasteStore.getState().profile, { seed, exclude, count: 15 });
+  if (more.length === 0) return;
+  usePlayerStore.setState({
+    queue: [...queue, ...more],
+    baseQueue: [...usePlayerStore.getState().baseQueue, ...more],
+  });
+  try {
+    await TrackPlayer.add(more.map(toRNTPTrack));
+  } catch {
+    // ignore transient queue errors
+  }
+}
+
+function attachListeners(): void {
+  if (listenersAttached) return;
+  listenersAttached = true;
+
+  TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
+    usePlayerStore.setState({
+      isPlaying: event.state === State.Playing,
+      isBuffering: event.state === State.Buffering || event.state === State.Loading,
+    });
+  });
+
+  TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (event) => {
+    usePlayerStore.setState({
+      positionSec: event.position,
+      durationSec: event.duration > 0 ? event.duration : usePlayerStore.getState().durationSec,
+    });
+  });
+
+  TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, (event) => {
+    // Spurious events fire while we rebuild the queue; the action handles those
+    // explicitly (feedback + optimistic index), so ignore them here.
+    if (rebuilding) return;
+
+    // Record implicit feedback for the track we just left, resolved from the
+    // event payload (the store queue may already have changed).
+    const last = event.lastTrack;
+    const lastId = last && typeof last.id === 'string' ? (last.id as string) : undefined;
+    if (last && lastId) {
+      const byId = useLibraryStore.getState().byId;
+      const durationSec =
+        typeof last.duration === 'number' && last.duration > 0
+          ? last.duration
+          : (byId[lastId]?.durationMs ?? 0) / 1000;
+      const playedSec = event.lastPosition || 0;
+      const completed = durationSec > 0 && playedSec >= durationSec - 2;
+      const prev: Track = byId[lastId] ?? {
+        id: lastId,
+        uri: typeof last.url === 'string' ? last.url : '',
+        title: typeof last.title === 'string' ? last.title : '',
+        artist: typeof last.artist === 'string' ? last.artist : '',
+        album: typeof last.album === 'string' ? last.album : '',
+        durationMs: Math.round(durationSec * 1000),
+        filename: '',
+      };
+      useTasteStore.getState().recordPlay(prev, { completed, playedSec, durationSec });
+    }
+
+    if (typeof event.index === 'number') {
+      const track = usePlayerStore.getState().queue[event.index];
+      usePlayerStore.setState({
+        currentIndex: event.index,
+        positionSec: 0,
+        durationSec:
+          track && track.durationMs > 0 ? track.durationMs / 1000 : usePlayerStore.getState().durationSec,
+      });
+      void maybeExtendRadio();
     }
   });
 }
 
 /**
- * Configures the global audio session for background playback.
- * Call once during app startup.
- *
- * Note: SDK 54's `expo-audio` does not expose a notification-permission request
- * API; the `POST_NOTIFICATIONS` permission declared in app.json is requested by
- * the OS when the media notification is first shown in a standalone build.
+ * Initializes the RNTP engine, configures lock-screen / notification controls
+ * (incl. next & previous), and attaches state listeners. Call once on startup
+ * while the app is in the foreground.
  */
-export async function initAudioSession(): Promise<void> {
-  await setAudioModeAsync({
-    playsInSilentMode: true,
-    shouldPlayInBackground: true,
-    interruptionMode: 'doNotMix',
+export async function initPlayer(): Promise<void> {
+  if (setupDone) return;
+  try {
+    await TrackPlayer.setupPlayer();
+  } catch {
+    // setupPlayer throws if already initialized (e.g. fast refresh); ignore.
+  }
+  await TrackPlayer.updateOptions({
+    android: {
+      appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+    },
+    progressUpdateEventInterval: 1,
+    capabilities: [
+      Capability.Play,
+      Capability.Pause,
+      Capability.SkipToNext,
+      Capability.SkipToPrevious,
+      Capability.SeekTo,
+      Capability.Stop,
+    ],
+    compactCapabilities: [
+      Capability.Play,
+      Capability.Pause,
+      Capability.SkipToNext,
+      Capability.SkipToPrevious,
+    ],
+    notificationCapabilities: [
+      Capability.Play,
+      Capability.Pause,
+      Capability.SkipToNext,
+      Capability.SkipToPrevious,
+      Capability.SeekTo,
+    ],
   });
+  setupDone = true;
+  attachListeners();
+  usePlayerStore.setState({ ready: true });
 }

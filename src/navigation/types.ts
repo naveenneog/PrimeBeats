@@ -19,4 +19,6 @@ export type RootStackParamList = {
   PlaylistDetail: { playlistId: string };
   SmartPlaylist: { kind: SmartPlaylistKind };
   AddToPlaylist: { trackIds: string[] };
+  Settings: undefined;
+  ManageHidden: undefined;
 };

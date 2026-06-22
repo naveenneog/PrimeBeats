@@ -9,6 +9,7 @@ import { ArtTile } from '../components/ArtTile';
 import { MINI_PLAYER_HEIGHT } from '../components/MiniPlayer';
 import { EmptyState, LoadingState } from '../components/States';
 import { TrackRow } from '../components/TrackRow';
+import { useTrackActions } from '../components/TrackActionsSheet';
 import type { RootStackParamList, TabsParamList } from '../navigation/types';
 import { useLibraryStore } from '../store/libraryStore';
 import { usePlaylistStore } from '../store/playlistStore';
@@ -41,6 +42,7 @@ export function HomeScreen() {
   const startRadio = usePlayerStore((s) => s.startRadio);
   const profile = useTasteStore((s) => s.profile);
   const forYou = useMemo(() => recommendForYou(tracks, profile, 12), [tracks, profile]);
+  const trackActions = useTrackActions();
 
   if (status === 'loading' || status === 'idle') {
     return (
@@ -83,9 +85,14 @@ export function HomeScreen() {
             <Text style={styles.greeting}>{greeting()}</Text>
             <Text style={styles.brand}>PrimeBeats</Text>
           </View>
-          <Pressable hitSlop={8} onPress={() => goTab('Search')} style={styles.iconBtn}>
-            <Ionicons name="search" size={22} color={colors.text} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable hitSlop={8} onPress={() => goTab('Search')} style={styles.iconBtn}>
+              <Ionicons name="search" size={22} color={colors.text} />
+            </Pressable>
+            <Pressable hitSlop={8} onPress={() => navigation.navigate('Settings')} style={styles.iconBtn}>
+              <Ionicons name="settings-outline" size={22} color={colors.text} />
+            </Pressable>
+          </View>
         </View>
 
         {tracks.length === 0 ? (
@@ -215,13 +222,14 @@ export function HomeScreen() {
                   isActive={currentTrack?.id === track.id}
                   isPlaying={isPlaying}
                   onPress={() => playFrom(recent, index)}
-                  onMenu={() => navigation.navigate('AddToPlaylist', { trackIds: [track.id] })}
+                  onMenu={() => trackActions.open(track)}
                 />
               ))}
             </Section>
           </>
         )}
       </ScrollView>
+      {trackActions.sheet}
     </SafeAreaView>
   );
 }
@@ -271,6 +279,11 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     letterSpacing: -0.5,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   iconBtn: {
     width: 40,

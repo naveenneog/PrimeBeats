@@ -11,8 +11,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { useLibraryStore } from './src/store/libraryStore';
-import { initAudioSession, usePlayerStore } from './src/store/playerStore';
+import { initPlayer, usePlayerStore } from './src/store/playerStore';
 import { usePlaylistStore } from './src/store/playlistStore';
+import { useSettingsStore } from './src/store/settingsStore';
 import { useTasteStore } from './src/store/tasteStore';
 import { colors } from './src/theme';
 
@@ -36,8 +37,9 @@ export default function App() {
   const trackCount = useLibraryStore((s) => s.tracks.length);
 
   useEffect(() => {
-    // Configure the audio session for background playback, then load data.
-    void initAudioSession();
+    // Set up the playback engine (RNTP) for background + lock-screen controls.
+    void initPlayer();
+    void useSettingsStore.getState().hydrate();
     void usePlaylistStore.getState().hydrate();
     void useTasteStore.getState().hydrate();
     void useLibraryStore.getState().load();
