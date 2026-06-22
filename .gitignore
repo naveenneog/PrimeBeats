@@ -42,3 +42,8 @@ yarn-error.*
 
 # Release APKs (published via GitHub Releases, not tracked)
 *.apk
+
+# Local Expo module native build outputs
+modules/*/android/build/
+modules/*/android/.cxx/
+modules/*/build/

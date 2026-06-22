@@ -22,4 +22,5 @@ export type RootStackParamList = {
   Settings: undefined;
   ManageHidden: undefined;
   Queue: undefined;
+  Equalizer: undefined;
 };

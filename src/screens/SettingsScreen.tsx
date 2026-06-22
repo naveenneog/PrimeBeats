@@ -12,7 +12,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useTasteStore } from '../store/tasteStore';
 import { colors, radius, spacing } from '../theme';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.4.0';
 
 function Row({
   icon,
@@ -98,6 +98,15 @@ export function SettingsScreen() {
               : 'Hide recordings & long files from the library'
           }
           onPress={() => navigation.navigate('ManageHidden')}
+        />
+
+        <Text style={styles.section}>Audio</Text>
+        <Row
+          icon="options"
+          iconColor={colors.primary}
+          title="Equalizer"
+          subtitle="Tune bands, pick a preset, or boost the bass"
+          onPress={() => navigation.navigate('Equalizer')}
         />
 
         <Text style={styles.section}>Recommendations</Text>

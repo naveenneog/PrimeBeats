@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { AddToPlaylistScreen } from '../screens/AddToPlaylistScreen';
 import { AlbumDetailScreen } from '../screens/AlbumDetailScreen';
+import { EqualizerScreen } from '../screens/EqualizerScreen';
 import { ManageHiddenScreen } from '../screens/ManageHiddenScreen';
 import { NowPlayingScreen } from '../screens/NowPlayingScreen';
 import { PlaylistDetailScreen } from '../screens/PlaylistDetailScreen';
@@ -21,6 +22,7 @@ export function RootNavigator() {
       <Stack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />
       <Stack.Screen name="SmartPlaylist" component={SmartPlaylistScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Equalizer" component={EqualizerScreen} />
       <Stack.Screen name="ManageHidden" component={ManageHiddenScreen} />
       <Stack.Screen
         name="NowPlaying"

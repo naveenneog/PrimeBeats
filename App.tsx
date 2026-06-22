@@ -13,6 +13,7 @@ import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { ArtworkSheet } from './src/components/ArtworkSheet';
 import { prefetchEmbeddedArt } from './src/media/embeddedArt';
 import { useArtworkStore } from './src/store/artworkStore';
+import { useEqStore } from './src/store/eqStore';
 import { useLibraryStore } from './src/store/libraryStore';
 import { initPlayer, usePlayerStore } from './src/store/playerStore';
 import { usePlaylistStore } from './src/store/playlistStore';
@@ -46,6 +47,7 @@ export default function App() {
     void usePlaylistStore.getState().hydrate();
     void useTasteStore.getState().hydrate();
     void useArtworkStore.getState().hydrate();
+    void useEqStore.getState().init();
     void useLibraryStore.getState().load();
 
     return () => {

@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["EqualizerModule"]
+  },
+  "android": {
+    "modules": ["com.primebeats.equalizer.EqualizerModule"]
+  }
+}

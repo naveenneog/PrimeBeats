@@ -86,6 +86,9 @@ export function NowPlayingScreen() {
             >
               <Ionicons name="add" size={26} color={colors.text} />
             </Pressable>
+            <Pressable hitSlop={8} onPress={() => navigation.navigate('Equalizer')}>
+              <Ionicons name="options" size={24} color={colors.text} />
+            </Pressable>
             <Pressable hitSlop={8} onPress={() => navigation.navigate('Queue')}>
               <Ionicons name="list" size={24} color={colors.text} />
             </Pressable>
