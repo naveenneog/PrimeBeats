@@ -5,10 +5,10 @@ import type { Album, Track } from '../types';
 import { folderFromUri, parseTitleArtist } from '../utils/format';
 
 /**
- * `expo-media-library` is a device-only module (Android/iOS). Its new Query API
- * defines classes that extend the native `ExpoMediaLibraryNext` module *at
- * module-evaluation time*, so even importing it on web throws. We therefore
- * only load it on supported platforms, via a guarded dynamic import.
+ * `expo-media-library` is a device-only module (Android/iOS) with no web
+ * implementation, so importing it on web throws. We therefore only load it on
+ * supported platforms, via a guarded dynamic import. This targets the SDK 54
+ * legacy API (`getAssetsAsync`), where each asset is a plain object.
  */
 const isSupported = Platform.OS === 'android' || Platform.OS === 'ios';
 
@@ -31,24 +31,6 @@ export async function ensureAudioPermission(): Promise<PermissionResponse> {
   return current;
 }
 
-/** Runs async mappers over `items` with a bounded concurrency to keep the UI responsive. */
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  mapper: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let cursor = 0;
-  const workers = new Array(Math.min(limit, items.length || 1)).fill(0).map(async () => {
-    while (cursor < items.length) {
-      const index = cursor++;
-      results[index] = await mapper(items[index], index);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
 /**
  * Scans the device for audio assets and maps them to {@link Track} objects.
  * Returns an empty array on unsupported platforms or when permission is denied.
@@ -59,35 +41,41 @@ export async function scanTracks(): Promise<Track[]> {
   if (!permission.granted) return [];
 
   const ML = await import('expo-media-library');
-  const assets = await new ML.Query()
-    .eq(ML.AssetField.MEDIA_TYPE, ML.MediaType.AUDIO)
-    .orderBy(ML.AssetField.MODIFICATION_TIME)
-    .exe();
+  const tracks: Track[] = [];
+  let after: string | undefined;
 
-  const tracks = await mapWithConcurrency(assets, 16, async (asset) => {
-    try {
-      const info = await asset.getInfo();
-      const filename = info.filename ?? 'Unknown';
+  // Page through the whole audio library (the default page size is small).
+  for (;;) {
+    const page = await ML.getAssetsAsync({
+      mediaType: ML.MediaType.audio,
+      first: 200,
+      ...(after ? { after } : {}),
+    });
+
+    for (const asset of page.assets) {
+      const filename = asset.filename ?? 'Unknown';
+      const uri = asset.uri ?? '';
+      if (!uri) continue;
       const { title, artist } = parseTitleArtist(filename);
-      const uri = info.uri ?? '';
-      const track: Track = {
+      tracks.push({
         id: asset.id,
         uri,
         title,
         artist,
         album: folderFromUri(uri),
-        durationMs: info.duration != null ? Math.round(info.duration) : 0,
+        // Legacy `Asset.duration` is in seconds; normalise to milliseconds.
+        durationMs: asset.duration ? Math.round(asset.duration * 1000) : 0,
         filename,
-      };
-      return track;
-    } catch {
-      return null;
+      });
     }
-  });
 
-  return tracks
-    .filter((t): t is Track => t != null && !!t.uri)
-    .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+    if (!page.hasNextPage || page.assets.length === 0) break;
+    after = page.endCursor;
+  }
+
+  return tracks.sort((a, b) =>
+    a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }),
+  );
 }
 
 /** Groups a flat list of tracks into album buckets keyed by folder + artist. */

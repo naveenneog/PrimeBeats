@@ -2,6 +2,8 @@
 
 A polished, Amazon-Prime-Music-style **local music player for Android**, built with Expo (React Native + TypeScript). It streams audio from your device's storage, builds a browsable library with album/folder grouping, lets you create and manage playlists, and supports **background playback with lock-screen / notification controls**.
 
+> Built on **Expo SDK 54** so it runs in the current **Expo Go** app. Background playback + lock-screen controls require a standalone/dev build (Expo Go can't run the media foreground service).
+
 > **Note on YouTube:** A YouTube "audio-only + ad-blocking" mode was intentionally **not** built — extracting audio-only streams and blocking ads violates YouTube's Terms of Service. This app focuses on your own local music. See [Roadmap](#roadmap) for the compliant way to add YouTube later.
 
 ---
@@ -23,7 +25,7 @@ A polished, Amazon-Prime-Music-style **local music player for Android**, built w
 
 | Concern | Library |
 | --- | --- |
-| Runtime | Expo SDK **56** (React Native 0.85, React 19) |
+| Runtime | Expo SDK **54** (React Native 0.81, React 19) — chosen for Expo Go compatibility |
 | Audio playback / background / lock screen | `expo-audio` |
 | Media scanning | `expo-media-library` |
 | Navigation | `@react-navigation/native` (native-stack + bottom-tabs) |

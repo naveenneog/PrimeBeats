@@ -34,7 +34,6 @@
       [
         "expo-audio",
         {
-          "enableBackgroundPlayback": true,
           "enableBackgroundRecording": false,
           "recordAudioAndroid": false
         }
@@ -47,10 +46,7 @@
           ],
           "isAccessMediaLocationEnabled": false
         }
-      ],
-      "expo-image",
-      "expo-font",
-      "expo-asset"
+      ]
     ]
   }
 }

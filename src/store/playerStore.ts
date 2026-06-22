@@ -1,10 +1,8 @@
 import {
   createAudioPlayer,
-  requestNotificationPermissionsAsync,
   setAudioModeAsync,
   type AudioStatus,
 } from 'expo-audio';
-import { Platform } from 'react-native';
 import { create } from 'zustand';
 
 import type { RepeatMode, Track } from '../types';
@@ -61,7 +59,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     const track = queue[index];
     if (!track) return;
 
-    player.replace({ uri: track.uri, name: track.title });
+    player.replace({ uri: track.uri });
     player.setActiveForLockScreen(true, {
       title: track.title,
       artist: track.artist,
@@ -232,9 +230,12 @@ if (!listenerAttached) {
 }
 
 /**
- * Configures the global audio session for background playback and requests the
- * Android notification permission needed to show media controls.
+ * Configures the global audio session for background playback.
  * Call once during app startup.
+ *
+ * Note: SDK 54's `expo-audio` does not expose a notification-permission request
+ * API; the `POST_NOTIFICATIONS` permission declared in app.json is requested by
+ * the OS when the media notification is first shown in a standalone build.
  */
 export async function initAudioSession(): Promise<void> {
   await setAudioModeAsync({
@@ -242,11 +243,4 @@ export async function initAudioSession(): Promise<void> {
     shouldPlayInBackground: true,
     interruptionMode: 'doNotMix',
   });
-  if (Platform.OS === 'android') {
-    try {
-      await requestNotificationPermissionsAsync();
-    } catch {
-      // Non-fatal: media controls may not appear without notification permission.
-    }
-  }
 }
