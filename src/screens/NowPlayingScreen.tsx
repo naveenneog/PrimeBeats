@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Slider from '@react-native-community/slider';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { NowPlayingArt } from '../components/NowPlayingArt';
+import { SeekBar } from '../components/SeekBar';
 import { TopBar } from '../components/TopBar';
 import { ensureEmbeddedArt } from '../media/embeddedArt';
 import type { RootStackParamList } from '../navigation/types';
@@ -14,7 +14,6 @@ import { selectCurrentTrack, usePlayerStore } from '../store/playerStore';
 import { useArtworkSheetStore } from '../store/artworkSheetStore';
 import { useTasteStore } from '../store/tasteStore';
 import { colors, radius, spacing } from '../theme';
-import { formatSeconds } from '../utils/format';
 
 export function NowPlayingScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -40,9 +39,6 @@ export function NowPlayingScreen() {
   const unlike = useTasteStore((s) => s.unlike);
   const openArtwork = useArtworkSheetStore((s) => s.open);
 
-  const [seeking, setSeeking] = useState(false);
-  const [seekValue, setSeekValue] = useState(0);
-
   useEffect(() => {
     if (track) void ensureEmbeddedArt(track);
   }, [track?.id]);
@@ -60,7 +56,6 @@ export function NowPlayingScreen() {
 
   const artSize = Math.min(width - spacing.xl * 2, 340);
   const max = durationSec > 0 ? durationSec : Math.max(1, track.durationMs / 1000);
-  const displayPos = seeking ? seekValue : Math.min(positionSec, max);
 
   const liked = !!likedMap[track.id];
   const toggleLike = () => (liked ? unlike(track) : like(track));
@@ -128,25 +123,7 @@ export function NowPlayingScreen() {
         </Pressable>
 
         <View style={styles.sliderBlock}>
-          <Slider
-            style={styles.slider}
-            minimumValue={0}
-            maximumValue={max}
-            value={displayPos}
-            minimumTrackTintColor={colors.primary}
-            maximumTrackTintColor={colors.border}
-            thumbTintColor={colors.primary}
-            onSlidingStart={() => setSeeking(true)}
-            onValueChange={setSeekValue}
-            onSlidingComplete={(value) => {
-              seekTo(value);
-              setSeeking(false);
-            }}
-          />
-          <View style={styles.timeRow}>
-            <Text style={styles.time}>{formatSeconds(displayPos)}</Text>
-            <Text style={styles.time}>{formatSeconds(max)}</Text>
-          </View>
+          <SeekBar position={positionSec} duration={max} onSeek={seekTo} />
         </View>
 
         <View style={styles.controls}>
@@ -253,20 +230,6 @@ const styles = StyleSheet.create({
   },
   sliderBlock: {
     marginBottom: spacing.lg,
-  },
-  slider: {
-    width: '100%',
-    height: 36,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: -spacing.xs,
-  },
-  time: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontVariant: ['tabular-nums'],
   },
   controls: {
     flexDirection: 'row',

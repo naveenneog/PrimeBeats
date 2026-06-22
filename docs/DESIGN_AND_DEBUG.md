@@ -28,14 +28,22 @@ index.ts ──registers──> RNTP playback service (lock-screen remote contro
 ### State (Zustand stores, all in `src/store/`)
 | Store | Responsibility | Persistence |
 | --- | --- | --- |
-| `libraryStore` | Scans device audio; holds `allTracks` (raw) and `tracks`/`albums`/`byId` (visible) | none (rescans) |
+| `libraryStore` | Scans device audio; holds `rawTracks` (scan), `allTracks` (overrides applied) and `tracks`/`albums`/`byId` (visible) | none (rescans) |
 | `playlistStore` | User playlists CRUD | AsyncStorage |
 | `tasteStore` | Learned taste profile + Most/Recently Played selectors | AsyncStorage |
 | `settingsStore` | Hidden/excluded track ids | AsyncStorage |
+| `metadataStore` | Per-track title/artist overrides (user-edited names) | AsyncStorage |
+| `artworkStore` | Per-track custom/web/uploaded cover art | AsyncStorage + files |
+| `eqStore` | Equalizer + bass-boost settings | AsyncStorage |
 | `playerStore` | Playback queue + controls, driven by RNTP | runtime only |
 
+`libraryStore` applies `metadataStore` overrides to `rawTracks` (in
+`recomputeAll`) and filters `settingsStore.hidden` (in `recomputeVisible`); it
+subscribes to both stores so renames/hides reflect live across the app.
+
 Stores reference each other **only inside actions** (deferred), so cyclic imports
-(`libraryStore` ⇄ `settingsStore`, `playerStore` → `library`/`taste`) are safe.
+(`libraryStore` ⇄ `settingsStore`/`metadataStore`, `playerStore` →
+`library`/`taste`) are safe.
 
 ---
 
@@ -141,7 +149,8 @@ the app's playback without needing the player's session id.
 | Recommendations feel random | Cold start (empty profile) falls back to shuffle. Play/like songs or complete onboarding to seed `tasteStore`. |
 | Onboarding never shows / shows again | Gate logic in `App.tsx` (`needsOnboarding`) + `tasteStore.onboardingDone`. "Reset taste & onboarding" in Settings clears it. |
 | Equalizer screen says "unavailable" | Device forbids app-controlled global effects → `Equalizer(0,0)` threw, `eqStore.available === false`. Expected on some phones; not a bug. |
-| EQ moves but no audible change | Some devices apply session-0 effects only to certain outputs (e.g. speaker vs BT). Try wired/Bluetooth; confirm master toggle + per-band/bass-boost are enabled. |
+| Renamed song reverts after restart | `metadataStore` not hydrated before use, or `libraryStore.recomputeAll` not re-run. Check `App.tsx` hydrates `metadataStore` and the `useMetadataStore.subscribe` in `libraryStore.ts`. Overrides live in `@primebeats/metadata/v1`. |
+| Seek pin not showing while scrubbing | `SeekBar` only renders the pin while `seeking` and after `onLayout` sets a width; verify the slider has a measured width. |
 
 ### Tools
 - **Type-check:** `npx tsc --noEmit`
@@ -149,7 +158,7 @@ the app's playback without needing the player's session id.
 - **Logs:** Metro console for JS; `adb logcat | findstr -i "TrackPlayer ReactNative"` for native/playback logs on a connected device.
 - **Inspect persisted state:** the AsyncStorage keys are
   `@primebeats/playlists/v1`, `@primebeats/taste/v1`, `@primebeats/settings/v1`,
-  `@primebeats/equalizer/v1`.
+  `@primebeats/equalizer/v1`, `@primebeats/metadata/v1`, `@primebeats/artwork/v1`.
 
 ---
 
@@ -181,13 +190,13 @@ Notes:
 ```
 src/
   ml/            features.ts, recommender.ts            (recommendation engine)
-  store/         library/playlist/taste/settings/player/eq (zustand state)
+  store/         library/playlist/taste/settings/metadata/artwork/eq/player (zustand)
   player/        playbackService.ts                     (RNTP lock-screen service)
   media/         scanner.ts, embeddedArt.ts, webArt.ts  (scan + artwork sources)
   native/        equalizer.ts                           (crash-proof EQ bridge)
   navigation/    RootNavigator, Tabs, types
   components/    ArtTile, TrackRow, TrackList, MiniPlayer, TrackActionsSheet,
-                 NowPlayingArt, ReorderablePlaylist, ArtworkSheet,
+                 NowPlayingArt, ReorderablePlaylist, ArtworkSheet, SeekBar,
                  TopBar, Header, States, TextPromptModal
   screens/       Home, Songs, Albums, AlbumDetail, Playlists, PlaylistDetail,
                  SmartPlaylist, Search, NowPlaying, AddToPlaylist, Onboarding,

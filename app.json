@@ -2,7 +2,7 @@
   "expo": {
     "name": "PrimeBeats",
     "slug": "PrimeBeats",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.primebeats.app",
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

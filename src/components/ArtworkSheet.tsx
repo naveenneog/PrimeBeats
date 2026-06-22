@@ -5,56 +5,87 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
-import { searchArtwork, type ArtResult } from '../media/webArt';
+import { searchArtworkByQuery, type ArtResult } from '../media/webArt';
 import { selectArt, useArtworkStore } from '../store/artworkStore';
 import { useArtworkSheetStore } from '../store/artworkSheetStore';
+import { useMetadataStore } from '../store/metadataStore';
 import { colors, radius, spacing } from '../theme';
 
 /**
- * App-root sheet for changing a track's album art: download from the web
- * (iTunes), upload a custom image from the device, or reset to default.
- * Opened via `useArtworkSheetStore.open(track)`.
+ * App-root sheet for editing a track: rename the title/artist (saved as a
+ * persistent override), then find album art on the web (iTunes) using the full
+ * info — with an editable query so the user can add details when nothing is
+ * found — upload a custom image, or reset to default.
+ * Opened via `useArtworkSheetStore.open(track, mode?)`.
  */
 export function ArtworkSheet() {
   const track = useArtworkSheetStore((s) => s.target);
+  const initialMode = useArtworkSheetStore((s) => s.initialMode);
   const close = useArtworkSheetStore((s) => s.close);
   const setFromUrl = useArtworkStore((s) => s.setFromUrl);
   const setFromLocalUri = useArtworkStore((s) => s.setFromLocalUri);
   const removeArt = useArtworkStore((s) => s.remove);
   const currentArt = useArtworkStore((s) => selectArt(s, track?.id));
+  const saveMetadata = useMetadataStore((s) => s.set);
 
-  const [mode, setMode] = useState<'menu' | 'web'>('menu');
+  const [mode, setMode] = useState<'menu' | 'web' | 'edit'>('menu');
   const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [results, setResults] = useState<ArtResult[]>([]);
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState('');
+  const [title, setTitle] = useState('');
+  const [artist, setArtist] = useState('');
 
   useEffect(() => {
     if (track) {
-      setMode('menu');
+      setMode(initialMode);
       setResults([]);
+      setSearched(false);
+      setTitle(track.title);
+      setArtist(track.artist);
+      setQuery(defaultQuery(track.artist, track.title));
     }
-  }, [track]);
+  }, [track, initialMode]);
 
   if (!track) return null;
 
-  const findOnWeb = async () => {
+  const runSearch = async (q: string) => {
     setMode('web');
     setLoading(true);
-    const res = await searchArtwork(track.artist, track.title);
+    setSearched(true);
+    const res = await searchArtworkByQuery(q);
     setResults(res);
     setLoading(false);
-    if (res.length === 0) {
-      Alert.alert('No artwork found', 'Try renaming the file or upload a custom image instead.');
-      setMode('menu');
-    }
+  };
+
+  const saveDetails = (): { title: string; artist: string } => {
+    const t = title.trim() || track.title;
+    const a = artist.trim() || track.artist;
+    saveMetadata(track.id, { title: t, artist: a });
+    return { title: t, artist: a };
+  };
+
+  const saveAndFind = () => {
+    const saved = saveDetails();
+    setQuery(defaultQuery(saved.artist, saved.title));
+    void runSearch(defaultQuery(saved.artist, saved.title));
+  };
+
+  const saveOnly = () => {
+    saveDetails();
+    close();
   };
 
   const applyUrl = async (url: string) => {
@@ -88,73 +119,148 @@ export function ArtworkSheet() {
   return (
     <Modal visible transparent animationType="slide" onRequestClose={close}>
       <Pressable style={styles.backdrop} onPress={close}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.handle} />
-          <View style={styles.header}>
-            <Image
-              source={currentArt ? { uri: currentArt } : undefined}
-              style={styles.preview}
-              contentFit="cover"
-            />
-            <View style={styles.headerMeta}>
-              <Text numberOfLines={1} style={styles.title}>
-                {track.title}
-              </Text>
-              <Text numberOfLines={1} style={styles.artist}>
-                {track.artist}
-              </Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.kav}
+        >
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.handle} />
+            <View style={styles.header}>
+              <Image
+                source={currentArt ? { uri: currentArt } : undefined}
+                style={styles.preview}
+                contentFit="cover"
+              />
+              <View style={styles.headerMeta}>
+                <Text numberOfLines={1} style={styles.title}>
+                  {mode === 'edit' ? title || track.title : track.title}
+                </Text>
+                <Text numberOfLines={1} style={styles.artist}>
+                  {mode === 'edit' ? artist || track.artist : track.artist}
+                </Text>
+              </View>
+              <Pressable hitSlop={8} onPress={close}>
+                <Ionicons name="close" size={24} color={colors.textMuted} />
+              </Pressable>
             </View>
-            <Pressable hitSlop={8} onPress={close}>
-              <Ionicons name="close" size={24} color={colors.textMuted} />
-            </Pressable>
-          </View>
 
-          {busy ? (
-            <View style={styles.center}>
-              <ActivityIndicator color={colors.primary} />
-              <Text style={styles.muted}>Saving artwork…</Text>
-            </View>
-          ) : mode === 'menu' ? (
-            <View>
-              <Action icon="globe-outline" label="Find artwork on the web" onPress={findOnWeb} />
-              <Action icon="image-outline" label="Upload from device" onPress={uploadCustom} />
-              {currentArt ? (
-                <Action
-                  icon="refresh-outline"
-                  label="Reset to default"
-                  destructive
-                  onPress={() => {
-                    void removeArt(track.id);
-                    close();
-                  }}
+            {busy ? (
+              <View style={styles.center}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={styles.muted}>Saving artwork…</Text>
+              </View>
+            ) : mode === 'edit' ? (
+              <View style={styles.editBlock}>
+                <Text style={styles.fieldLabel}>Title</Text>
+                <TextInput
+                  style={styles.input}
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder="Song title"
+                  placeholderTextColor={colors.textFaint}
+                  returnKeyType="next"
                 />
-              ) : null}
-            </View>
-          ) : (
-            <View style={styles.webBlock}>
-              {loading ? (
-                <View style={styles.center}>
-                  <ActivityIndicator color={colors.primary} />
-                  <Text style={styles.muted}>Searching…</Text>
+                <Text style={styles.fieldLabel}>Artist</Text>
+                <TextInput
+                  style={styles.input}
+                  value={artist}
+                  onChangeText={setArtist}
+                  placeholder="Artist"
+                  placeholderTextColor={colors.textFaint}
+                  returnKeyType="done"
+                />
+                <Pressable style={styles.primaryBtn} onPress={saveAndFind}>
+                  <Ionicons name="search" size={18} color={colors.black} />
+                  <Text style={styles.primaryBtnText}>Save & find artwork</Text>
+                </Pressable>
+                <Pressable style={styles.secondaryBtn} onPress={saveOnly}>
+                  <Text style={styles.secondaryBtnText}>Save details only</Text>
+                </Pressable>
+              </View>
+            ) : mode === 'menu' ? (
+              <View>
+                <Action
+                  icon="create-outline"
+                  label="Edit name & artist"
+                  onPress={() => setMode('edit')}
+                />
+                <Action
+                  icon="globe-outline"
+                  label="Find artwork on the web"
+                  onPress={() => runSearch(defaultQuery(track.artist, track.title))}
+                />
+                <Action icon="image-outline" label="Upload from device" onPress={uploadCustom} />
+                {currentArt ? (
+                  <Action
+                    icon="refresh-outline"
+                    label="Reset to default"
+                    destructive
+                    onPress={() => {
+                      void removeArt(track.id);
+                      close();
+                    }}
+                  />
+                ) : null}
+              </View>
+            ) : (
+              <View style={styles.webBlock}>
+                <View style={styles.searchRow}>
+                  <TextInput
+                    style={styles.searchInput}
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Artist, album, song, year…"
+                    placeholderTextColor={colors.textFaint}
+                    returnKeyType="search"
+                    onSubmitEditing={() => runSearch(query)}
+                  />
+                  <Pressable style={styles.searchBtn} onPress={() => runSearch(query)}>
+                    <Ionicons name="search" size={18} color={colors.black} />
+                  </Pressable>
                 </View>
-              ) : (
-                <ScrollView contentContainerStyle={styles.grid}>
-                  {results.map((r) => (
-                    <Pressable key={r.url} style={styles.cell} onPress={() => applyUrl(r.url)}>
-                      <Image source={{ uri: r.url }} style={styles.cellImg} contentFit="cover" transition={150} />
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              )}
-              <Text style={styles.disclaimer}>
-                Artwork from the iTunes catalog. Tap a cover to use it for this song.
-              </Text>
-            </View>
-          )}
-        </Pressable>
+
+                {loading ? (
+                  <View style={styles.center}>
+                    <ActivityIndicator color={colors.primary} />
+                    <Text style={styles.muted}>Searching…</Text>
+                  </View>
+                ) : results.length > 0 ? (
+                  <ScrollView contentContainerStyle={styles.grid} keyboardShouldPersistTaps="handled">
+                    {results.map((r) => (
+                      <Pressable key={r.url} style={styles.cell} onPress={() => applyUrl(r.url)}>
+                        <Image
+                          source={{ uri: r.url }}
+                          style={styles.cellImg}
+                          contentFit="cover"
+                          transition={150}
+                        />
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                ) : searched ? (
+                  <Text style={styles.hint}>
+                    No artwork found. Add an album name or release year above and search again — or
+                    upload your own image below.
+                  </Text>
+                ) : null}
+
+                <Action icon="image-outline" label="Upload from device" onPress={uploadCustom} />
+                <Text style={styles.disclaimer}>
+                  Artwork from the iTunes catalog. Tap a cover to use it for this song.
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        </KeyboardAvoidingView>
       </Pressable>
     </Modal>
   );
+}
+
+/** Builds a sensible default search query from a track's artist + title. */
+function defaultQuery(artist: string, title: string): string {
+  const cleanedArtist = (artist || '').replace(/unknown artist/gi, '').trim();
+  return `${cleanedArtist} ${title}`.trim() || title;
 }
 
 function Action({
@@ -181,6 +287,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
+  },
+  kav: {
+    width: '100%',
   },
   sheet: {
     backgroundColor: colors.surfaceAlt,
@@ -273,5 +382,88 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
+  },
+  editBlock: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  fieldLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  input: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.text,
+    fontSize: 16,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  primaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.md,
+    marginTop: spacing.lg,
+  },
+  primaryBtnText: {
+    color: colors.black,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  secondaryBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    marginTop: spacing.xs,
+  },
+  secondaryBtnText: {
+    color: colors.textMuted,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.text,
+    fontSize: 15,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  searchBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hint: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
   },
 });

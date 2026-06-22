@@ -74,6 +74,14 @@ export function TrackActionsSheet({ track, onClose }: { track: Track | null; onC
             }}
           />
           <Action
+            icon="create-outline"
+            label="Edit song & artist"
+            onPress={() => {
+              onClose();
+              openArtwork(track, 'edit');
+            }}
+          />
+          <Action
             icon="image-outline"
             label="Change artwork"
             onPress={() => {

@@ -15,6 +15,7 @@ import { prefetchEmbeddedArt } from './src/media/embeddedArt';
 import { useArtworkStore } from './src/store/artworkStore';
 import { useEqStore } from './src/store/eqStore';
 import { useLibraryStore } from './src/store/libraryStore';
+import { useMetadataStore } from './src/store/metadataStore';
 import { initPlayer, usePlayerStore } from './src/store/playerStore';
 import { usePlaylistStore } from './src/store/playlistStore';
 import { useSettingsStore } from './src/store/settingsStore';
@@ -47,6 +48,7 @@ export default function App() {
     void usePlaylistStore.getState().hydrate();
     void useTasteStore.getState().hydrate();
     void useArtworkStore.getState().hydrate();
+    void useMetadataStore.getState().hydrate();
     void useEqStore.getState().init();
     void useLibraryStore.getState().load();
 
