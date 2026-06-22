@@ -5,9 +5,13 @@ import type { Track } from '../types';
 
 /**
  * Extracts embedded album art (ID3 / metadata) from local audio files using a
- * native metadata retriever. This is **best-effort**: the library is loaded via
- * a guarded dynamic import, so if it isn't available the app simply falls back
- * to web-downloaded / custom / generated artwork without crashing.
+ * native metadata retriever. This is **best-effort**: the retriever is loaded
+ * via a guarded dynamic import, so if it isn't available the app simply falls
+ * back to web-downloaded / custom / generated artwork without crashing.
+ *
+ * NOTE: As of v1.3.0 no native retriever is bundled (the previous third-party
+ * lib conflicted with media3 used by the player). A built-in implementation is
+ * planned for a later release; until then these helpers no-op gracefully.
  */
 const isSupported = Platform.OS === 'android' || Platform.OS === 'ios';
 
@@ -16,14 +20,12 @@ let prefetchStarted = false;
 
 async function getRetriever() {
   if (retriever !== undefined) return retriever;
-  try {
-    const mod = (await import('@missingcore/react-native-metadata-retriever')) as unknown as {
-      getArtwork?: (uri: string) => Promise<string | null>;
-    };
-    retriever = mod;
-  } catch {
-    retriever = null;
-  }
+  // No native retriever is currently bundled (the previous third-party lib
+  // conflicted with the media3 version used by the player). Resolve to null so
+  // callers fall back to web-downloaded / custom / generated artwork. A built-in
+  // retriever (Android MediaMetadataRetriever via a local module) is planned for
+  // a later release and will be wired in here.
+  retriever = null;
   return retriever;
 }
 
