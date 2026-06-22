@@ -19,8 +19,10 @@ A polished, Amazon-Prime-Music-style **local music player for Android**, built w
 - **Smart playlists** — auto-generated **Most Played**, **Recently Played**, and **Made for You**.
 - **Albums** — automatically grouped from your music folders, with a dedicated album view.
 - **Search** — instant filtering across songs, artists, and albums.
-- **Album art** — colorful, deterministic generated cover tiles per album/track (see [Album art](#album-art)).
-- **Now Playing** — full-screen player with large art, scrubber, and all controls.
+- **Album art** — uses custom/web-downloaded art when available, with colorful deterministic generated cover tiles as a fallback. Tap a track's art to **find art on the web** (iTunes) or **upload your own** (see [Album art](#album-art)).
+- **Equalizer & bass boost** — a graphic EQ with device presets (Flat, Rock, Pop, …), per-band sliders, and a bass-boost control, backed by a native audio-effects module. Settings are saved across launches and updates.
+- **Now Playing** — full-screen player with large art, scrubber, and all controls. **Swipe** the art to change track and **double-tap** left/right to seek ∓2s.
+- **Drag-to-reorder** — rearrange tracks within a playlist by dragging.
 - **Persistent mini-player** — docked above the tab bar on every screen.
 - Dark, modern Material-inspired UI.
 
@@ -130,8 +132,7 @@ npx expo export -p android  # bundle the JS to catch resolution errors
 
 ## 🗺️ Roadmap
 
-- **Embedded album art** via a small native module / `MediaStore` album-art URIs.
-- **Drag-to-reorder** playlist tracks.
+- **Embedded album art** — read ID3/cover art straight from files via a built-in `MediaMetadataRetriever` in the native module (the previous third-party lib clashed with the player's media3 and was removed).
 - **Compliant YouTube Music**: integrate via the official YouTube IFrame Player / YouTube Data API using the *official player* (which honors ads and ToS) — not audio-only extraction.
 
 ## 📄 License

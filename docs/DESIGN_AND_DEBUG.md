@@ -97,7 +97,38 @@ Feedback is logged in the `PlaybackActiveTrackChanged` listener: a track is
 
 ---
 
-## 5. Debugging playbook
+## 5. Equalizer & audio effects (native local module)
+
+A graphic EQ + bass boost backed by a **local Expo module** in
+`modules/equalizer/` (Kotlin). It wraps `android.media.audiofx.Equalizer` and
+`BassBoost` on **audio session 0** (the global output mix), so effects apply to
+the app's playback without needing the player's session id.
+
+- **Native** (`EqualizerModule.kt`): `isAvailable`, `getInfo`
+  (bands / level range / center freqs / presets), `getBandLevels`,
+  `setBandLevel`, `usePreset`, `setEnabled`, `setBassBoostEnabled/Strength`,
+  `release`. Every call is wrapped in try/catch — creating the effect can throw
+  on devices that forbid global effects, so `isAvailable` returns false there.
+- **JS bridge** (`src/native/equalizer.ts`): requires the module defensively
+  (guarded `require` + per-call try/catch) so the app never crashes if the
+  native side is missing (e.g. Expo Go).
+- **State** (`eqStore.ts`): persists `{enabled, bandLevels, presetIndex,
+  bassBoostEnabled, bassBoostStrength}` to `@primebeats/equalizer/v1` and
+  re-applies them on launch (`init()` from `App.tsx`). Sliders call `previewX`
+  (live, no write) on change and the persisting setter on release.
+- **UI** (`EqualizerScreen`): preset chips, per-band sliders, bass-boost
+  toggle + slider, reset-to-flat. Reached from Settings → Audio and the Now
+  Playing toolbar (sliders icon).
+- **Units:** band levels are **millibels** (÷100 = dB); center freqs are Hz;
+  bass-boost strength is 0–1000. Needs `MODIFY_AUDIO_SETTINGS` (declared in the
+  module manifest and app.json).
+- **Why a custom module?** RNTP exposes no EQ API, and the third-party metadata
+  lib we trialled bundled a forked media3 that duplicate-class-clashed with
+  RNTP's androidx.media3 — so we own the native effect code instead.
+
+---
+
+## 6. Debugging playbook
 
 | Symptom | Where to look |
 | --- | --- |
@@ -109,17 +140,20 @@ Feedback is logged in the `PlaybackActiveTrackChanged` listener: a track is
 | Hidden track still shows | `recomputeVisible` not triggered → confirm the `useSettingsStore.subscribe` in `libraryStore.ts` and that screens read `libraryStore.tracks` (not `allTracks`). |
 | Recommendations feel random | Cold start (empty profile) falls back to shuffle. Play/like songs or complete onboarding to seed `tasteStore`. |
 | Onboarding never shows / shows again | Gate logic in `App.tsx` (`needsOnboarding`) + `tasteStore.onboardingDone`. "Reset taste & onboarding" in Settings clears it. |
+| Equalizer screen says "unavailable" | Device forbids app-controlled global effects → `Equalizer(0,0)` threw, `eqStore.available === false`. Expected on some phones; not a bug. |
+| EQ moves but no audible change | Some devices apply session-0 effects only to certain outputs (e.g. speaker vs BT). Try wired/Bluetooth; confirm master toggle + per-band/bass-boost are enabled. |
 
 ### Tools
 - **Type-check:** `npx tsc --noEmit`
 - **Bundle check (catches import/resolution errors):** `npx expo export -p android`
 - **Logs:** Metro console for JS; `adb logcat | findstr -i "TrackPlayer ReactNative"` for native/playback logs on a connected device.
 - **Inspect persisted state:** the AsyncStorage keys are
-  `@primebeats/playlists/v1`, `@primebeats/taste/v1`, `@primebeats/settings/v1`.
+  `@primebeats/playlists/v1`, `@primebeats/taste/v1`, `@primebeats/settings/v1`,
+  `@primebeats/equalizer/v1`.
 
 ---
 
-## 6. Build & release (local, no EAS)
+## 7. Build & release (local, no EAS)
 
 The standalone APK is built on a machine with JDK 17 + Android SDK (see README).
 
@@ -142,21 +176,25 @@ Notes:
 
 ---
 
-## 7. Directory map
+## 8. Directory map
 
 ```
 src/
   ml/            features.ts, recommender.ts            (recommendation engine)
-  store/         library/playlist/taste/settings/player (zustand state)
+  store/         library/playlist/taste/settings/player/eq (zustand state)
   player/        playbackService.ts                     (RNTP lock-screen service)
-  media/         scanner.ts                             (expo-media-library scan)
+  media/         scanner.ts, embeddedArt.ts, webArt.ts  (scan + artwork sources)
+  native/        equalizer.ts                           (crash-proof EQ bridge)
   navigation/    RootNavigator, Tabs, types
   components/    ArtTile, TrackRow, TrackList, MiniPlayer, TrackActionsSheet,
+                 NowPlayingArt, ReorderablePlaylist, ArtworkSheet,
                  TopBar, Header, States, TextPromptModal
   screens/       Home, Songs, Albums, AlbumDetail, Playlists, PlaylistDetail,
                  SmartPlaylist, Search, NowPlaying, AddToPlaylist, Onboarding,
-                 Settings, ManageHidden
+                 Settings, ManageHidden, Queue, Equalizer
   utils/         format.ts
   theme.ts, types.ts
+modules/
+  equalizer/     Expo local native module (Kotlin EQ + BassBoost)
 App.tsx, index.ts
 ```
