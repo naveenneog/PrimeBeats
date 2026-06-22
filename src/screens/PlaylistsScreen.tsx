@@ -13,6 +13,19 @@ import { TextPromptModal } from '../components/TextPromptModal';
 import type { RootStackParamList } from '../navigation/types';
 import { usePlaylistStore } from '../store/playlistStore';
 import { colors, radius, spacing } from '../theme';
+import type { SmartPlaylistKind } from '../types';
+
+const SMART: {
+  kind: SmartPlaylistKind;
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+}[] = [
+  { kind: 'forYou', title: 'Made for You', subtitle: 'Tuned to your taste', icon: 'sparkles', color: colors.accent },
+  { kind: 'mostPlayed', title: 'Most Played', subtitle: 'Your top tracks', icon: 'flame', color: '#FF6B6B' },
+  { kind: 'recentlyPlayed', title: 'Recently Played', subtitle: 'Jump back in', icon: 'time', color: '#4DABF7' },
+];
 
 export function PlaylistsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -45,6 +58,25 @@ export function PlaylistsScreen() {
                 </Pressable>
               }
             />
+            <Text style={styles.smartHeading}>Made by PrimeBeats</Text>
+            {SMART.map((s) => (
+              <Pressable
+                key={s.kind}
+                style={styles.smartRow}
+                android_ripple={{ color: colors.surfaceAlt }}
+                onPress={() => navigation.navigate('SmartPlaylist', { kind: s.kind })}
+              >
+                <View style={[styles.smartIcon, { backgroundColor: s.color }]}>
+                  <Ionicons name={s.icon} size={22} color={colors.white} />
+                </View>
+                <View style={styles.smartMeta}>
+                  <Text style={styles.smartTitle}>{s.title}</Text>
+                  <Text style={styles.smartSub}>{s.subtitle}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+              </Pressable>
+            ))}
+            {playlists.length > 0 ? <Text style={styles.smartHeading}>Your playlists</Text> : null}
           </View>
         }
         ListEmptyComponent={
@@ -130,5 +162,40 @@ const styles = StyleSheet.create({
   },
   trash: {
     padding: spacing.xs,
+  },
+  smartHeading: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '700',
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  smartRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  smartIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  smartMeta: {
+    flex: 1,
+  },
+  smartTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  smartSub: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginTop: 2,
   },
 });

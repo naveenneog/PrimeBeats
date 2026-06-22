@@ -10,6 +10,7 @@ import { ArtTile } from '../components/ArtTile';
 import { TopBar } from '../components/TopBar';
 import type { RootStackParamList } from '../navigation/types';
 import { selectCurrentTrack, usePlayerStore } from '../store/playerStore';
+import { useTasteStore } from '../store/tasteStore';
 import { colors, radius, spacing } from '../theme';
 import { formatSeconds } from '../utils/format';
 
@@ -29,6 +30,11 @@ export function NowPlayingScreen() {
   const seekTo = usePlayerStore((s) => s.seekTo);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
+  const startRadio = usePlayerStore((s) => s.startRadio);
+  const radioMode = usePlayerStore((s) => s.radioMode);
+  const likedMap = useTasteStore((s) => s.profile.liked);
+  const like = useTasteStore((s) => s.like);
+  const unlike = useTasteStore((s) => s.unlike);
 
   const [seeking, setSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
@@ -48,6 +54,8 @@ export function NowPlayingScreen() {
   const max = durationSec > 0 ? durationSec : Math.max(1, track.durationMs / 1000);
   const displayPos = seeking ? seekValue : Math.min(positionSec, max);
 
+  const liked = !!likedMap[track.id];
+  const toggleLike = () => (liked ? unlike(track) : like(track));
   const repeatActive = repeat !== 'off';
 
   return (
@@ -56,9 +64,21 @@ export function NowPlayingScreen() {
         variant="close"
         title="Now Playing"
         right={
-          <Pressable hitSlop={10} onPress={() => navigation.navigate('AddToPlaylist', { trackIds: [track.id] })}>
-            <Ionicons name="add" size={26} color={colors.text} />
-          </Pressable>
+          <View style={styles.topActions}>
+            <Pressable hitSlop={8} onPress={toggleLike}>
+              <Ionicons
+                name={liked ? 'heart' : 'heart-outline'}
+                size={24}
+                color={liked ? colors.primary : colors.text}
+              />
+            </Pressable>
+            <Pressable
+              hitSlop={8}
+              onPress={() => navigation.navigate('AddToPlaylist', { trackIds: [track.id] })}
+            >
+              <Ionicons name="add" size={26} color={colors.text} />
+            </Pressable>
+          </View>
         }
       />
 
@@ -75,6 +95,16 @@ export function NowPlayingScreen() {
             {track.artist}
           </Text>
         </View>
+
+        <Pressable
+          style={[styles.radioBtn, radioMode && styles.radioBtnOn]}
+          onPress={() => startRadio(track)}
+        >
+          <Ionicons name="radio" size={18} color={radioMode ? colors.black : colors.primary} />
+          <Text style={[styles.radioText, radioMode && styles.radioTextOn]}>
+            {radioMode ? 'Smart Radio on' : 'Start Smart Radio'}
+          </Text>
+        </Pressable>
 
         <View style={styles.sliderBlock}>
           <Slider
@@ -157,7 +187,36 @@ const styles = StyleSheet.create({
     minHeight: 200,
   },
   info: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  radioBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    marginBottom: spacing.md,
+  },
+  radioBtnOn: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  radioText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  radioTextOn: {
+    color: colors.black,
   },
   title: {
     color: colors.text,

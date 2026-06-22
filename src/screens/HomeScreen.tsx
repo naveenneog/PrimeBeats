@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,6 +13,8 @@ import type { RootStackParamList, TabsParamList } from '../navigation/types';
 import { useLibraryStore } from '../store/libraryStore';
 import { usePlaylistStore } from '../store/playlistStore';
 import { selectCurrentTrack, usePlayerStore } from '../store/playerStore';
+import { useTasteStore } from '../store/tasteStore';
+import { recommendForYou } from '../ml/recommender';
 import { colors, radius, spacing } from '../theme';
 
 function greeting(): string {
@@ -36,6 +38,9 @@ export function HomeScreen() {
   const shuffle = usePlayerStore((s) => s.shuffle);
   const currentTrack = usePlayerStore(selectCurrentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const startRadio = usePlayerStore((s) => s.startRadio);
+  const profile = useTasteStore((s) => s.profile);
+  const forYou = useMemo(() => recommendForYou(tracks, profile, 12), [tracks, profile]);
 
   if (status === 'loading' || status === 'idle') {
     return (
@@ -103,6 +108,52 @@ export function HomeScreen() {
               </View>
               <Ionicons name="play-circle" size={36} color={colors.primary} />
             </Pressable>
+
+            <View style={styles.smartRow}>
+              <Pressable
+                style={styles.smartChip}
+                onPress={() => navigation.navigate('SmartPlaylist', { kind: 'mostPlayed' })}
+              >
+                <Ionicons name="flame" size={18} color="#FF6B6B" />
+                <Text style={styles.smartChipText}>Most Played</Text>
+              </Pressable>
+              <Pressable
+                style={styles.smartChip}
+                onPress={() => navigation.navigate('SmartPlaylist', { kind: 'recentlyPlayed' })}
+              >
+                <Ionicons name="time" size={18} color="#4DABF7" />
+                <Text style={styles.smartChipText}>Recently Played</Text>
+              </Pressable>
+            </View>
+
+            {forYou.length > 0 ? (
+              <Section
+                title="Made for You"
+                onSeeAll={() => navigation.navigate('SmartPlaylist', { kind: 'forYou' })}
+              >
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.hRow}
+                >
+                  {forYou.map((track) => (
+                    <Pressable
+                      key={track.id}
+                      style={styles.albumCard}
+                      onPress={() => startRadio(track)}
+                    >
+                      <ArtTile seed={track.album || track.title} size={140} rounded={radius.md} />
+                      <Text numberOfLines={1} style={styles.albumName}>
+                        {track.title}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.albumArtist}>
+                        {track.artist}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </Section>
+            ) : null}
 
             {topAlbums.length > 0 ? (
               <Section title="Albums" onSeeAll={() => goTab('Albums')}>
@@ -253,6 +304,27 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     marginTop: 2,
+  },
+  smartRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+  },
+  smartChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  smartChipText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
   },
   section: {
     marginTop: spacing.xl,

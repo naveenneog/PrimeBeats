@@ -5,7 +5,10 @@ import {
 } from 'expo-audio';
 import { create } from 'zustand';
 
+import { recommendNext } from '../ml/recommender';
 import type { RepeatMode, Track } from '../types';
+import { useLibraryStore } from './libraryStore';
+import { useTasteStore } from './tasteStore';
 
 /**
  * A single, app-wide AudioPlayer that lives for the entire process lifetime.
@@ -31,8 +34,12 @@ type PlayerState = {
   durationSec: number;
   shuffle: boolean;
   repeat: RepeatMode;
+  /** When true, the queue auto-extends with ML recommendations (Smart Radio). */
+  radioMode: boolean;
 
   playFrom: (tracks: Track[], index: number) => void;
+  /** Starts an endless, taste-aware "radio" seeded from a track (or current). */
+  startRadio: (seed?: Track) => void;
   play: () => void;
   pause: () => void;
   togglePlay: () => void;
@@ -41,6 +48,8 @@ type PlayerState = {
   seekTo: (sec: number) => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
+  /** Records implicit feedback for the current track as the user leaves it. */
+  logLeaving: (completed: boolean) => void;
   stop: () => void;
 };
 
@@ -54,6 +63,25 @@ function shuffleWithCurrentFirst(tracks: Track[], current: Track): Track[] {
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
+  /** In radio mode, append more recommendations as the queue nears its end. */
+  function maybeExtendRadio() {
+    const { radioMode, queue, currentIndex } = get();
+    if (!radioMode || queue.length - currentIndex > 3) return;
+    const library = useLibraryStore.getState().tracks;
+    if (library.length === 0) return;
+    const seed = queue[currentIndex] ?? queue[queue.length - 1];
+    if (!seed) return;
+    const exclude = new Set(queue.map((t) => t.id));
+    const more = recommendNext(library, useTasteStore.getState().profile, {
+      seed,
+      exclude,
+      count: 15,
+    });
+    if (more.length) {
+      set({ queue: [...queue, ...more], baseQueue: [...get().baseQueue, ...more] });
+    }
+  }
+
   function loadTrackAt(index: number, autoplay: boolean) {
     const { queue } = get();
     const track = queue[index];
@@ -73,6 +101,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     });
 
     if (autoplay) player.play();
+    maybeExtendRadio();
   }
 
   return {
@@ -85,18 +114,38 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     durationSec: 0,
     shuffle: false,
     repeat: 'off',
+    radioMode: false,
 
     playFrom: (tracks, index) => {
       if (tracks.length === 0) return;
+      if (get().currentIndex >= 0) get().logLeaving(false);
       const chosen = tracks[Math.max(0, Math.min(index, tracks.length - 1))];
       if (get().shuffle) {
         const shuffled = shuffleWithCurrentFirst(tracks, chosen);
-        set({ baseQueue: tracks, queue: shuffled });
+        set({ baseQueue: tracks, queue: shuffled, radioMode: false });
         loadTrackAt(0, true);
       } else {
-        set({ baseQueue: tracks, queue: tracks });
+        set({ baseQueue: tracks, queue: tracks, radioMode: false });
         loadTrackAt(tracks.indexOf(chosen), true);
       }
+    },
+
+    startRadio: (seedTrack) => {
+      const library = useLibraryStore.getState().tracks;
+      if (library.length === 0) return;
+      if (get().currentIndex >= 0) get().logLeaving(false);
+      const seed =
+        seedTrack ??
+        get().queue[get().currentIndex] ??
+        library[Math.floor(Math.random() * library.length)];
+      const recs = recommendNext(library, useTasteStore.getState().profile, {
+        seed,
+        exclude: new Set([seed.id]),
+        count: 30,
+      });
+      const queue = [seed, ...recs];
+      set({ baseQueue: queue, queue, radioMode: true, shuffle: false });
+      loadTrackAt(0, true);
     },
 
     play: () => {
@@ -138,6 +187,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           return;
         }
       }
+      if (!auto) get().logLeaving(false);
       loadTrackAt(nextIndex, true);
     },
 
@@ -156,6 +206,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           return;
         }
       }
+      get().logLeaving(false);
       loadTrackAt(prevIndex, true);
     },
 
@@ -189,6 +240,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       set({ repeat: nextMode });
     },
 
+    logLeaving: (completed) => {
+      const { queue, currentIndex, positionSec, durationSec } = get();
+      const track = queue[currentIndex];
+      if (!track) return;
+      useTasteStore.getState().recordPlay(track, {
+        completed,
+        playedSec: positionSec,
+        durationSec: durationSec || track.durationMs / 1000,
+      });
+    },
+
     stop: () => {
       player.pause();
       void player.seekTo(0);
@@ -218,6 +280,7 @@ if (!listenerAttached) {
     if (status.didJustFinish && !advancing) {
       advancing = true;
       try {
+        usePlayerStore.getState().logLeaving(true);
         usePlayerStore.getState().next(true);
       } finally {
         // Release on the next tick so a single end-of-track only advances once.

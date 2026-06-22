@@ -1,5 +1,7 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
+import type { SmartPlaylistKind } from '../types';
+
 /** Bottom-tab routes. */
 export type TabsParamList = {
   Home: undefined;
@@ -15,5 +17,6 @@ export type RootStackParamList = {
   NowPlaying: undefined;
   AlbumDetail: { albumId: string };
   PlaylistDetail: { playlistId: string };
+  SmartPlaylist: { kind: SmartPlaylistKind };
   AddToPlaylist: { trackIds: string[] };
 };
