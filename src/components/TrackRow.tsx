@@ -23,7 +23,7 @@ function TrackRowBase({ track, isActive, isPlaying, onPress, onMenu }: Props) {
       android_ripple={{ color: colors.surfaceAlt }}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
-      <ArtTile seed={track.album || track.title} uri={track.artworkUri} size={48} rounded={radius.sm} />
+      <ArtTile seed={track.album || track.title} trackId={track.id} uri={track.artworkUri} size={48} rounded={radius.sm} />
       <View style={styles.meta}>
         <Text
           numberOfLines={1}

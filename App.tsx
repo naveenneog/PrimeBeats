@@ -10,6 +10,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
+import { ArtworkSheet } from './src/components/ArtworkSheet';
+import { prefetchEmbeddedArt } from './src/media/embeddedArt';
+import { useArtworkStore } from './src/store/artworkStore';
 import { useLibraryStore } from './src/store/libraryStore';
 import { initPlayer, usePlayerStore } from './src/store/playerStore';
 import { usePlaylistStore } from './src/store/playlistStore';
@@ -42,6 +45,7 @@ export default function App() {
     void useSettingsStore.getState().hydrate();
     void usePlaylistStore.getState().hydrate();
     void useTasteStore.getState().hydrate();
+    void useArtworkStore.getState().hydrate();
     void useLibraryStore.getState().load();
 
     return () => {
@@ -54,6 +58,13 @@ export default function App() {
   const needsOnboarding =
     tasteHydrated && !onboardingDone && libraryStatus === 'ready' && trackCount > 0;
 
+  useEffect(() => {
+    // Background-extract embedded album art once the library is ready.
+    if (libraryStatus === 'ready') {
+      void prefetchEmbeddedArt(useLibraryStore.getState().allTracks);
+    }
+  }, [libraryStatus]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -65,6 +76,7 @@ export default function App() {
             <RootNavigator />
           </NavigationContainer>
         )}
+        <ArtworkSheet />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

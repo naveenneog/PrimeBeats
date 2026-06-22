@@ -2,14 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Slider from '@react-native-community/slider';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ArtTile } from '../components/ArtTile';
+import { NowPlayingArt } from '../components/NowPlayingArt';
 import { TopBar } from '../components/TopBar';
+import { ensureEmbeddedArt } from '../media/embeddedArt';
 import type { RootStackParamList } from '../navigation/types';
 import { selectCurrentTrack, usePlayerStore } from '../store/playerStore';
+import { useArtworkSheetStore } from '../store/artworkSheetStore';
 import { useTasteStore } from '../store/tasteStore';
 import { colors, radius, spacing } from '../theme';
 import { formatSeconds } from '../utils/format';
@@ -28,6 +30,7 @@ export function NowPlayingScreen() {
   const next = usePlayerStore((s) => s.next);
   const previous = usePlayerStore((s) => s.previous);
   const seekTo = usePlayerStore((s) => s.seekTo);
+  const seekBy = usePlayerStore((s) => s.seekBy);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const cycleRepeat = usePlayerStore((s) => s.cycleRepeat);
   const startRadio = usePlayerStore((s) => s.startRadio);
@@ -35,9 +38,14 @@ export function NowPlayingScreen() {
   const likedMap = useTasteStore((s) => s.profile.liked);
   const like = useTasteStore((s) => s.like);
   const unlike = useTasteStore((s) => s.unlike);
+  const openArtwork = useArtworkSheetStore((s) => s.open);
 
   const [seeking, setSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
+
+  useEffect(() => {
+    if (track) void ensureEmbeddedArt(track);
+  }, [track?.id]);
 
   if (!track) {
     return (
@@ -78,13 +86,23 @@ export function NowPlayingScreen() {
             >
               <Ionicons name="add" size={26} color={colors.text} />
             </Pressable>
+            <Pressable hitSlop={8} onPress={() => navigation.navigate('Queue')}>
+              <Ionicons name="list" size={24} color={colors.text} />
+            </Pressable>
           </View>
         }
       />
 
       <View style={styles.body}>
         <View style={styles.artWrap}>
-          <ArtTile seed={track.album || track.title} uri={track.artworkUri} size={artSize} rounded={radius.xl} />
+          <NowPlayingArt
+            track={track}
+            size={artSize}
+            onNext={() => next()}
+            onPrevious={previous}
+            onSeekBy={seekBy}
+            onEditArtwork={() => openArtwork(track)}
+          />
         </View>
 
         <View style={styles.info}>

@@ -2,6 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { selectArt, useArtworkStore } from '../store/artworkStore';
 import { radius } from '../theme';
 import { gradientForSeed, initialsForName } from '../utils/format';
 
@@ -10,24 +11,27 @@ type Props = {
   seed: string;
   /** Optional real artwork uri; falls back to a generated gradient tile. */
   uri?: string;
+  /** When set, a user/web/embedded artwork override for this track is used if present. */
+  trackId?: string;
   size?: number;
   rounded?: number;
 };
 
 /**
- * Renders album art. When no artwork uri is available (the common case for
- * locally-scanned files, which expose no embedded art on this SDK) it draws a
- * deterministic gradient tile with the item's initials — colourful and stable
- * per album/track, like a placeholder cover.
+ * Renders album art. Resolution order: a persisted per-track override
+ * (custom upload / web download / embedded art) → an explicit `uri` →
+ * a deterministic gradient tile with the item's initials.
  */
-export function ArtTile({ seed, uri, size = 56, rounded = radius.md }: Props) {
+export function ArtTile({ seed, uri, trackId, size = 56, rounded = radius.md }: Props) {
+  const override = useArtworkStore((s) => selectArt(s, trackId));
+  const resolved = override ?? uri;
   const pair = gradientForSeed(seed);
   const fontSize = Math.max(12, size * 0.32);
 
-  if (uri) {
+  if (resolved) {
     return (
       <Image
-        source={{ uri }}
+        source={{ uri: resolved }}
         style={{ width: size, height: size, borderRadius: rounded }}
         contentFit="cover"
         transition={150}

@@ -91,6 +91,8 @@ type PlayerState = {
   next: () => void;
   previous: () => void;
   seekTo: (sec: number) => void;
+  seekBy: (delta: number) => void;
+  skipToIndex: (index: number) => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   stop: () => void;
@@ -144,6 +146,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const pos = Math.max(0, sec);
     void TrackPlayer.seekTo(pos);
     set({ positionSec: pos });
+  },
+  seekBy: (delta) => {
+    void TrackPlayer.seekBy(delta);
+    set({ positionSec: Math.max(0, get().positionSec + delta) });
+  },
+  skipToIndex: (index) => {
+    if (index < 0 || index >= get().queue.length) return;
+    void TrackPlayer.skip(index)
+      .then(() => TrackPlayer.play())
+      .catch(() => undefined);
   },
   toggleShuffle: () => {
     void doToggleShuffle();

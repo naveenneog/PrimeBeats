@@ -35,7 +35,7 @@ export function MiniPlayer() {
         android_ripple={{ color: colors.surfaceAlt }}
         onPress={() => navigation.navigate('NowPlaying')}
       >
-        <ArtTile seed={track.album || track.title} uri={track.artworkUri} size={42} rounded={radius.sm} />
+        <ArtTile seed={track.album || track.title} trackId={track.id} uri={track.artworkUri} size={42} rounded={radius.sm} />
         <View style={styles.meta}>
           <Text numberOfLines={1} style={styles.title}>
             {track.title}

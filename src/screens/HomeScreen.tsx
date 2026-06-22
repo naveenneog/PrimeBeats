@@ -149,7 +149,7 @@ export function HomeScreen() {
                       style={styles.albumCard}
                       onPress={() => startRadio(track)}
                     >
-                      <ArtTile seed={track.album || track.title} size={140} rounded={radius.md} />
+                      <ArtTile seed={track.album || track.title} trackId={track.id} size={140} rounded={radius.md} />
                       <Text numberOfLines={1} style={styles.albumName}>
                         {track.title}
                       </Text>

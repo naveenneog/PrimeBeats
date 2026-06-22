@@ -2,18 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ArtTile } from '../components/ArtTile';
 import { MINI_PLAYER_HEIGHT } from '../components/MiniPlayer';
+import { ReorderablePlaylist } from '../components/ReorderablePlaylist';
 import { EmptyState } from '../components/States';
 import { TextPromptModal } from '../components/TextPromptModal';
 import { TopBar } from '../components/TopBar';
-import { TrackList } from '../components/TrackList';
 import type { RootStackParamList } from '../navigation/types';
 import { useLibraryStore } from '../store/libraryStore';
-import { usePlayerStore } from '../store/playerStore';
+import { selectCurrentTrack, usePlayerStore } from '../store/playerStore';
 import { usePlaylistStore } from '../store/playlistStore';
 import { colors, radius, spacing } from '../theme';
 import { formatDuration } from '../utils/format';
@@ -24,10 +24,12 @@ export function PlaylistDetailScreen() {
   const playlist = usePlaylistStore((s) => s.playlists.find((p) => p.id === params.playlistId));
   const renamePlaylist = usePlaylistStore((s) => s.renamePlaylist);
   const removeTrack = usePlaylistStore((s) => s.removeTrack);
+  const reorderTracks = usePlaylistStore((s) => s.reorderTracks);
   const getTracks = useLibraryStore((s) => s.getTracks);
   const playFrom = usePlayerStore((s) => s.playFrom);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const shuffle = usePlayerStore((s) => s.shuffle);
+  const currentTrack = usePlayerStore(selectCurrentTrack);
   const [renaming, setRenaming] = useState(false);
 
   const tracks = useMemo(
@@ -61,36 +63,34 @@ export function PlaylistDetailScreen() {
           </Pressable>
         }
       />
-      <TrackList
-        tracks={tracks}
-        onPressTrack={(index) => playFrom(tracks, index)}
-        onTrackMenu={(track) => removeTrack(playlist.id, track.id)}
-        bottomPadding={MINI_PLAYER_HEIGHT + spacing.xxl}
-        ListHeaderComponent={
-          <View style={styles.hero}>
-            <ArtTile seed={playlist.name} size={170} rounded={radius.lg} />
-            <Text style={styles.title} numberOfLines={2}>
-              {playlist.name}
-            </Text>
-            <Text style={styles.subtitle}>
-              {tracks.length} song{tracks.length === 1 ? '' : 's'}
-              {totalMs > 0 ? ` · ${formatDuration(totalMs)}` : ''}
-            </Text>
-            {tracks.length > 0 ? (
-              <View style={styles.actions}>
-                <Pressable style={[styles.btn, styles.primaryBtn]} onPress={() => playFrom(tracks, 0)}>
-                  <Ionicons name="play" size={18} color={colors.black} />
-                  <Text style={styles.primaryText}>Play</Text>
-                </Pressable>
-                <Pressable style={[styles.btn, styles.ghostBtn]} onPress={shufflePlay}>
-                  <Ionicons name="shuffle" size={18} color={colors.text} />
-                  <Text style={styles.ghostText}>Shuffle</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-        }
-        ListEmptyComponent={
+      <ScrollView contentContainerStyle={{ paddingBottom: MINI_PLAYER_HEIGHT + spacing.xxl }}>
+        <View style={styles.hero}>
+          <ArtTile seed={playlist.name} size={170} rounded={radius.lg} />
+          <Text style={styles.title} numberOfLines={2}>
+            {playlist.name}
+          </Text>
+          <Text style={styles.subtitle}>
+            {tracks.length} song{tracks.length === 1 ? '' : 's'}
+            {totalMs > 0 ? ` · ${formatDuration(totalMs)}` : ''}
+          </Text>
+          {tracks.length > 0 ? (
+            <View style={styles.actions}>
+              <Pressable style={[styles.btn, styles.primaryBtn]} onPress={() => playFrom(tracks, 0)}>
+                <Ionicons name="play" size={18} color={colors.black} />
+                <Text style={styles.primaryText}>Play</Text>
+              </Pressable>
+              <Pressable style={[styles.btn, styles.ghostBtn]} onPress={shufflePlay}>
+                <Ionicons name="shuffle" size={18} color={colors.text} />
+                <Text style={styles.ghostText}>Shuffle</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {tracks.length > 1 ? (
+            <Text style={styles.reorderHint}>Drag the ≡ handle to reorder</Text>
+          ) : null}
+        </View>
+
+        {tracks.length === 0 ? (
           <EmptyState
             icon="add-circle-outline"
             title="This playlist is empty"
@@ -98,8 +98,16 @@ export function PlaylistDetailScreen() {
             actionLabel="Browse songs"
             onAction={() => navigation.navigate('Tabs', { screen: 'Songs' })}
           />
-        }
-      />
+        ) : (
+          <ReorderablePlaylist
+            tracks={tracks}
+            currentTrackId={currentTrack?.id}
+            onPlay={(ordered, index) => playFrom(ordered, index)}
+            onReorder={(ids) => reorderTracks(playlist.id, ids)}
+            onRemove={(trackId) => removeTrack(playlist.id, trackId)}
+          />
+        )}
+      </ScrollView>
 
       <TextPromptModal
         visible={renaming}
@@ -138,6 +146,11 @@ const styles = StyleSheet.create({
   subtitle: {
     color: colors.textMuted,
     fontSize: 13,
+  },
+  reorderHint: {
+    color: colors.textFaint,
+    fontSize: 12,
+    marginTop: spacing.sm,
   },
   actions: {
     flexDirection: 'row',

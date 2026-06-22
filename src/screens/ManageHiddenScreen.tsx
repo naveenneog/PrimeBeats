@@ -81,7 +81,7 @@ export function ManageHiddenScreen() {
               android_ripple={{ color: colors.surfaceAlt }}
               onPress={() => toggleHidden(item.id)}
             >
-              <ArtTile seed={item.album || item.title} size={44} rounded={radius.sm} />
+              <ArtTile seed={item.album || item.title} trackId={item.id} size={44} rounded={radius.sm} />
               <View style={styles.meta}>
                 <Text numberOfLines={1} style={[styles.title, isHidden && styles.titleHidden]}>
                   {item.title}

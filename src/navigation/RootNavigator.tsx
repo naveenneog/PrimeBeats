@@ -5,6 +5,7 @@ import { AlbumDetailScreen } from '../screens/AlbumDetailScreen';
 import { ManageHiddenScreen } from '../screens/ManageHiddenScreen';
 import { NowPlayingScreen } from '../screens/NowPlayingScreen';
 import { PlaylistDetailScreen } from '../screens/PlaylistDetailScreen';
+import { QueueScreen } from '../screens/QueueScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { SmartPlaylistScreen } from '../screens/SmartPlaylistScreen';
 import { Tabs } from './Tabs';
@@ -24,6 +25,11 @@ export function RootNavigator() {
       <Stack.Screen
         name="NowPlaying"
         component={NowPlayingScreen}
+        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="Queue"
+        component={QueueScreen}
         options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
       />
       <Stack.Screen

@@ -21,4 +21,5 @@ export type RootStackParamList = {
   AddToPlaylist: { trackIds: string[] };
   Settings: undefined;
   ManageHidden: undefined;
+  Queue: undefined;
 };

@@ -6,6 +6,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { RootStackParamList } from '../navigation/types';
 import { usePlayerStore } from '../store/playerStore';
+import { useArtworkSheetStore } from '../store/artworkSheetStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { colors, radius, spacing } from '../theme';
 import type { Track } from '../types';
@@ -35,6 +36,7 @@ export function TrackActionsSheet({ track, onClose }: { track: Track | null; onC
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const startRadio = usePlayerStore((s) => s.startRadio);
   const hide = useSettingsStore((s) => s.hide);
+  const openArtwork = useArtworkSheetStore((s) => s.open);
 
   if (!track) return null;
 
@@ -44,7 +46,7 @@ export function TrackActionsSheet({ track, onClose }: { track: Track | null; onC
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <ArtTile seed={track.album || track.title} uri={track.artworkUri} size={48} rounded={radius.sm} />
+            <ArtTile seed={track.album || track.title} trackId={track.id} uri={track.artworkUri} size={48} rounded={radius.sm} />
             <View style={styles.headerMeta}>
               <Text numberOfLines={1} style={styles.headerTitle}>
                 {track.title}
@@ -69,6 +71,14 @@ export function TrackActionsSheet({ track, onClose }: { track: Track | null; onC
             onPress={() => {
               onClose();
               navigation.navigate('AddToPlaylist', { trackIds: [track.id] });
+            }}
+          />
+          <Action
+            icon="image-outline"
+            label="Change artwork"
+            onPress={() => {
+              onClose();
+              openArtwork(track);
             }}
           />
           <Action
