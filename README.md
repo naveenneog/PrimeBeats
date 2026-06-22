@@ -14,6 +14,9 @@ A polished, Amazon-Prime-Music-style **local music player for Android**, built w
 - **Background playback** — keeps playing when the app is backgrounded or the screen is locked, with a media notification & lock-screen controls.
 - **Queue + playback controls** — play/pause, next/previous, seek, **shuffle**, and **repeat** (off / all / one), with automatic advance at track end.
 - **Playlists** — create, rename, delete, add/remove tracks; persisted locally with `AsyncStorage`.
+- **Smart Radio (on-device ML)** — an endless auto-queue that picks similar songs based on the current track and your learned taste, with exploration + per-artist diversity. Fully offline.
+- **Taste onboarding** — a first-run picker to seed your profile from favorite artists; it refines as you listen (plays / skips / likes).
+- **Smart playlists** — auto-generated **Most Played**, **Recently Played**, and **Made for You**.
 - **Albums** — automatically grouped from your music folders, with a dedicated album view.
 - **Search** — instant filtering across songs, artists, and albums.
 - **Album art** — colorful, deterministic generated cover tiles per album/track (see [Album art](#album-art)).
@@ -108,6 +111,15 @@ Background audio on Android requires `AudioPlayer.setActiveForLockScreen(...)`, 
 - `playFrom(tracks, index)` sets the queue and loads a track via `player.replace({ uri })`.
 - Each track change updates lock-screen metadata (`setActiveForLockScreen` / `updateLockScreenMetadata`).
 - A `playbackStatusUpdate` listener mirrors position/duration/playing state into the store and auto-advances on `didJustFinish` (respecting repeat mode).
+
+## 🧠 Smart Radio & taste learning
+A lightweight, **fully on-device** recommender (no cloud, no extra ML runtime):
+- **Content similarity** (`src/ml/features.ts`) — track-to-track closeness from metadata (artist, album/folder, title keywords).
+- **Taste profile** (`src/store/tasteStore.ts`) — accumulates affinity from **completed plays (+), early skips (−) and likes (++)**, seeded by onboarding; persisted via `AsyncStorage`.
+- **Recommender** (`src/ml/recommender.ts`) — blends similarity-to-seed + taste affinity + an exploration term − a recency penalty, then enforces per-artist diversity. Smart Radio auto-extends the queue as it nears the end.
+- **Smart playlists** derive from the same signals: Most Played (play count), Recently Played (recency), Made for You (taste mix).
+
+This is "Option A" (metadata + behavior). It's structured so **on-device audio analysis** (acoustic similarity) and **external trend/genre enrichment** can layer in later without UI changes.
 
 ## ✅ Verifying
 
