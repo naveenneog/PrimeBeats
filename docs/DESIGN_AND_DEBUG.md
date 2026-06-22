@@ -151,9 +151,18 @@ the app's playback without needing the player's session id.
 | Equalizer screen says "unavailable" | Device forbids app-controlled global effects → `Equalizer(0,0)` threw, `eqStore.available === false`. Expected on some phones; not a bug. |
 | Renamed song reverts after restart | `metadataStore` not hydrated before use, or `libraryStore.recomputeAll` not re-run. Check `App.tsx` hydrates `metadataStore` and the `useMetadataStore.subscribe` in `libraryStore.ts`. Overrides live in `@primebeats/metadata/v1`. |
 | Seek pin not showing while scrubbing | `SeekBar` only renders the pin while `seeking` and after `onLayout` sets a width; verify the slider has a measured width. |
+| Now Playing slider won't drag | Don't feed the slider a new `value` from the 250 ms progress tick mid-drag — `SeekBar` isolates scrubbing with `seekingRef`. A controlled value changing during the gesture fights the native thumb on Android. |
+| Most Played / Recently Played not updating | Plays are counted on a *substantial* listen (not only full completion) and recorded when **leaving** a track via `recordPlay`; Recently Played is recorded the moment a track becomes active via the `usePlayerStore.subscribe` → `tasteStore.recordStart`. `lastProgressSec` backs up `event.lastPosition` when it's missing. |
+| EQ sliders editable while master off | Native `Slider` ignores a parent's `pointerEvents="none"` — pass `disabled={!enabled}` to each slider/preset instead. |
+| Bass boost inaudible | Strength defaults to 0; `eqStore.setBassBoostEnabled` applies a default strength (600/1000) when first enabled. Some devices report `bassBoostSupported:false` (UI hides it). |
+| Queue reorder doesn't stick | `reorderQueue(from,to)` updates the mirror + `TrackPlayer.move`; current index is recomputed by track id. If native `move` throws, the next track change re-syncs. |
 
 ### Tools
 - **Type-check:** `npx tsc --noEmit`
+- **Unit tests (regression):** `npm test` (jest-expo). Pure-logic suites live in
+  `src/**/__tests__/` and cover formatting/parsing, the iTunes art search, taste
+  metadata overrides, the Smart-Radio recommender/features, and the seek-pin math
+  — so the core features stay intact across changes. Run before every release.
 - **Bundle check (catches import/resolution errors):** `npx expo export -p android`
 - **Logs:** Metro console for JS; `adb logcat | findstr -i "TrackPlayer ReactNative"` for native/playback logs on a connected device.
 - **Inspect persisted state:** the AsyncStorage keys are
@@ -194,14 +203,16 @@ src/
   player/        playbackService.ts                     (RNTP lock-screen service)
   media/         scanner.ts, embeddedArt.ts, webArt.ts  (scan + artwork sources)
   native/        equalizer.ts                           (crash-proof EQ bridge)
+  hooks/         useKeyboardHeight.ts                   (lift sheets over keyboard)
   navigation/    RootNavigator, Tabs, types
   components/    ArtTile, TrackRow, TrackList, MiniPlayer, TrackActionsSheet,
-                 NowPlayingArt, ReorderablePlaylist, ArtworkSheet, SeekBar,
-                 TopBar, Header, States, TextPromptModal
+                 NowPlayingArt, ReorderablePlaylist, ReorderableQueue, ArtworkSheet,
+                 SeekBar, TopBar, Header, States, TextPromptModal
   screens/       Home, Songs, Albums, AlbumDetail, Playlists, PlaylistDetail,
                  SmartPlaylist, Search, NowPlaying, AddToPlaylist, Onboarding,
                  Settings, ManageHidden, Queue, Equalizer
-  utils/         format.ts
+  utils/         format.ts, seek.ts
+  **/__tests__/  jest-expo unit tests (run with `npm test`)
   theme.ts, types.ts
 modules/
   equalizer/     Expo local native module (Kotlin EQ + BassBoost)

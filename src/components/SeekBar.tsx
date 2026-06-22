@@ -1,12 +1,10 @@
 import Slider from '@react-native-community/slider';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, spacing } from '../theme';
 import { formatSeconds } from '../utils/format';
-
-const THUMB_RADIUS = 11;
-const PIN_WIDTH = 58;
+import { SEEK_PIN_WIDTH, seekPinLeft } from '../utils/seek';
 
 type Props = {
   /** Current playback position in seconds. */
@@ -19,54 +17,63 @@ type Props = {
 
 /**
  * Playback scrubber with a floating timestamp "pin" that tracks the thumb while
- * dragging. Because the user's finger covers the thumb, the pin surfaces the
- * exact position they're about to seek to, above the slider.
+ * dragging. Scrubbing is isolated with a ref so the frequent playback-position
+ * updates never feed a new `value` into the native slider mid-drag (which would
+ * fight the gesture and make the thumb un-draggable on Android).
  */
 export function SeekBar({ position, duration, onSeek }: Props) {
+  const max = duration > 0 ? duration : 1;
   const [width, setWidth] = useState(0);
   const [seeking, setSeeking] = useState(false);
-  const [seekValue, setSeekValue] = useState(0);
+  const [value, setValue] = useState(0);
+  const seekingRef = useRef(false);
 
-  const max = duration > 0 ? duration : 1;
-  const display = seeking ? seekValue : Math.min(Math.max(position, 0), max);
-  const frac = max > 0 ? Math.min(Math.max(display / max, 0), 1) : 0;
-
-  // Thumb centre travels between THUMB_RADIUS and (width - THUMB_RADIUS).
-  const thumbCenter = THUMB_RADIUS + frac * Math.max(0, width - THUMB_RADIUS * 2);
-  const pinLeft = Math.min(Math.max(thumbCenter - PIN_WIDTH / 2, 0), Math.max(0, width - PIN_WIDTH));
+  // Follow live playback only while the user isn't actively scrubbing.
+  useEffect(() => {
+    if (!seekingRef.current) {
+      setValue(Math.min(Math.max(position, 0), max));
+    }
+  }, [position, max]);
 
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+  const pinLeft = seekPinLeft(value, max, width);
 
   return (
     <View>
-      <View style={styles.track} onLayout={onLayout}>
-        {seeking && width > 0 ? (
-          <View style={[styles.pin, { left: pinLeft }]} pointerEvents="none">
-            <Text style={styles.pinText}>{formatSeconds(display)}</Text>
-            <View style={styles.pinTail} />
-          </View>
-        ) : null}
+      <View style={styles.sliderWrap} onLayout={onLayout}>
         <Slider
           style={styles.slider}
           minimumValue={0}
           maximumValue={max}
-          value={display}
+          value={value}
+          tapToSeek
           minimumTrackTintColor={colors.primary}
           maximumTrackTintColor={colors.border}
           thumbTintColor={colors.primary}
-          onSlidingStart={() => {
-            setSeekValue(display);
+          onSlidingStart={(v) => {
+            seekingRef.current = true;
             setSeeking(true);
+            setValue(v);
           }}
-          onValueChange={setSeekValue}
-          onSlidingComplete={(value) => {
-            onSeek(value);
+          onValueChange={(v) => {
+            if (seekingRef.current) setValue(v);
+          }}
+          onSlidingComplete={(v) => {
+            seekingRef.current = false;
             setSeeking(false);
+            setValue(v);
+            onSeek(v);
           }}
         />
+        {seeking && width > 0 ? (
+          <View pointerEvents="none" style={[styles.pin, { left: pinLeft }]}>
+            <Text style={styles.pinText}>{formatSeconds(value)}</Text>
+            <View style={styles.pinTail} />
+          </View>
+        ) : null}
       </View>
       <View style={styles.timeRow}>
-        <Text style={styles.time}>{formatSeconds(display)}</Text>
+        <Text style={styles.time}>{formatSeconds(value)}</Text>
         <Text style={styles.time}>{formatSeconds(max)}</Text>
       </View>
     </View>
@@ -74,7 +81,7 @@ export function SeekBar({ position, duration, onSeek }: Props) {
 }
 
 const styles = StyleSheet.create({
-  track: {
+  sliderWrap: {
     height: 36,
     justifyContent: 'center',
   },
@@ -85,7 +92,7 @@ const styles = StyleSheet.create({
   pin: {
     position: 'absolute',
     bottom: 30,
-    width: PIN_WIDTH,
+    width: SEEK_PIN_WIDTH,
     alignItems: 'center',
     zIndex: 10,
   },

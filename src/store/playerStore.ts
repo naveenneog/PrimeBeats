@@ -31,6 +31,12 @@ let listenersAttached = false;
  */
 let rebuilding = false;
 let rebuildTimer: ReturnType<typeof setTimeout> | undefined;
+/**
+ * Last playback position (seconds) reported by the progress listener. Used as a
+ * fallback for implicit feedback when `PlaybackActiveTrackChanged.lastPosition`
+ * is missing/zero, so "Most Played" reliably counts auto-advanced plays.
+ */
+let lastProgressSec = 0;
 
 function beginRebuild(): void {
   rebuilding = true;
@@ -93,6 +99,8 @@ type PlayerState = {
   seekTo: (sec: number) => void;
   seekBy: (delta: number) => void;
   skipToIndex: (index: number) => void;
+  /** Reorders the queue (drag upcoming songs); applies to the native queue too. */
+  reorderQueue: (from: number, to: number) => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   stop: () => void;
@@ -157,6 +165,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       .then(() => TrackPlayer.play())
       .catch(() => undefined);
   },
+  reorderQueue: (from, to) => {
+    void doReorderQueue(from, to);
+  },
   toggleShuffle: () => {
     void doToggleShuffle();
   },
@@ -172,6 +183,46 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 /** Selector helper: the currently active track, or null. */
 export function selectCurrentTrack(state: PlayerState): Track | null {
   return state.currentIndex >= 0 ? state.queue[state.currentIndex] ?? null : null;
+}
+
+// Push the active track into Recently Played the moment it becomes current, so
+// the smart playlist updates immediately — not only when the track is left.
+let lastStartedId: string | null = null;
+usePlayerStore.subscribe((state) => {
+  const current = state.queue[state.currentIndex];
+  const id = current?.id ?? null;
+  if (!id) {
+    lastStartedId = null;
+    return;
+  }
+  if (id !== lastStartedId) {
+    lastStartedId = id;
+    useTasteStore.getState().recordStart(current);
+  }
+});
+
+async function doReorderQueue(from: number, to: number): Promise<void> {
+  const { queue, currentIndex } = usePlayerStore.getState();
+  if (from === to) return;
+  if (from < 0 || to < 0 || from >= queue.length || to >= queue.length) return;
+
+  const currentId = queue[currentIndex]?.id;
+  const next = queue.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  const newIndex = currentId ? next.findIndex((t) => t.id === currentId) : currentIndex;
+
+  // Optimistically update the mirror, then move the track in the native queue.
+  usePlayerStore.setState({
+    queue: next,
+    baseQueue: next,
+    currentIndex: newIndex >= 0 ? newIndex : currentIndex,
+  });
+  try {
+    await TrackPlayer.move(from, to);
+  } catch {
+    // If the native move fails the mirror may drift; the next track change re-syncs.
+  }
 }
 
 async function doPlayFrom(tracks: Track[], index: number): Promise<void> {
@@ -304,6 +355,7 @@ function attachListeners(): void {
   });
 
   TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (event) => {
+    if (event.position > 0) lastProgressSec = event.position;
     usePlayerStore.setState({
       positionSec: event.position,
       durationSec: event.duration > 0 ? event.duration : usePlayerStore.getState().durationSec,
@@ -325,7 +377,10 @@ function attachListeners(): void {
         typeof last.duration === 'number' && last.duration > 0
           ? last.duration
           : (byId[lastId]?.durationMs ?? 0) / 1000;
-      const playedSec = event.lastPosition || 0;
+      const playedSec =
+        typeof event.lastPosition === 'number' && event.lastPosition > 0
+          ? event.lastPosition
+          : lastProgressSec;
       const completed = durationSec > 0 && playedSec >= durationSec - 2;
       const prev: Track = byId[lastId] ?? {
         id: lastId,
@@ -341,6 +396,7 @@ function attachListeners(): void {
 
     if (typeof event.index === 'number') {
       const track = usePlayerStore.getState().queue[event.index];
+      lastProgressSec = 0;
       usePlayerStore.setState({
         currentIndex: event.index,
         positionSec: 0,

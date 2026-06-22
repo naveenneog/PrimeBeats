@@ -151,8 +151,15 @@ export const useEqStore = create<EqState>((set, get) => ({
   },
 
   setBassBoostEnabled: (enabled) => {
+    // Enabling boost with zero strength would be inaudible — apply a sensible
+    // default so the toggle has an immediate effect the first time.
+    let strength = get().bassBoostStrength;
+    if (enabled && strength <= 0) {
+      strength = 600;
+      Equalizer.setBassBoostStrength(strength);
+    }
     Equalizer.setBassBoostEnabled(enabled);
-    set({ bassBoostEnabled: enabled });
+    set({ bassBoostEnabled: enabled, bassBoostStrength: strength });
     void persist(get());
   },
 

@@ -64,6 +64,7 @@ export function EqualizerScreen() {
   const min = info?.minLevel ?? -1500;
   const max = info?.maxLevel ?? 1500;
   const dim = !enabled;
+  const bassSupported = info?.bassBoostSupported !== false;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -92,15 +93,16 @@ export function EqualizerScreen() {
             return (
               <Pressable
                 key={`${name}-${i}`}
+                disabled={!enabled}
                 onPress={() => applyPreset(i)}
-                style={[styles.presetChip, active && styles.presetChipOn]}
+                style={[styles.presetChip, active && styles.presetChipOn, dim && styles.dim]}
               >
                 <Text style={[styles.presetText, active && styles.presetTextOn]}>{name}</Text>
               </Pressable>
             );
           })}
           {presetIndex === null ? (
-            <View style={[styles.presetChip, styles.presetChipOn]}>
+            <View style={[styles.presetChip, styles.presetChipOn, dim && styles.dim]}>
               <Text style={[styles.presetText, styles.presetTextOn]}>Custom</Text>
             </View>
           ) : null}
@@ -109,7 +111,12 @@ export function EqualizerScreen() {
         {/* Bands */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.section}>Bands</Text>
-          <Pressable hitSlop={8} onPress={resetFlat} style={styles.resetBtn}>
+          <Pressable
+            hitSlop={8}
+            disabled={!enabled}
+            onPress={resetFlat}
+            style={[styles.resetBtn, dim && styles.dim]}
+          >
             <Ionicons name="refresh" size={14} color={colors.textMuted} />
             <Text style={styles.resetText}>Flat</Text>
           </Pressable>
@@ -127,6 +134,7 @@ export function EqualizerScreen() {
                   maximumValue={max}
                   step={100}
                   value={level}
+                  disabled={!enabled}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor={colors.border}
                   thumbTintColor={colors.primary}
@@ -152,29 +160,35 @@ export function EqualizerScreen() {
           </View>
           <Switch
             value={bassBoostEnabled}
+            disabled={!bassSupported}
             onValueChange={setBassBoostEnabled}
             trackColor={{ false: colors.border, true: colors.primaryDark }}
             thumbColor={bassBoostEnabled ? colors.primary : colors.textFaint}
           />
         </View>
-        <View
-          style={[styles.boostSliderWrap, !bassBoostEnabled && styles.dim]}
-          pointerEvents={bassBoostEnabled ? 'auto' : 'none'}
-        >
-          <Slider
-            style={styles.bandSlider}
-            minimumValue={0}
-            maximumValue={1000}
-            step={10}
-            value={bassBoostStrength}
-            minimumTrackTintColor={colors.primary}
-            maximumTrackTintColor={colors.border}
-            thumbTintColor={colors.primary}
-            onValueChange={previewBassBoostStrength}
-            onSlidingComplete={setBassBoostStrength}
-          />
-          <Text style={styles.boostPct}>{Math.round((bassBoostStrength / 1000) * 100)}%</Text>
-        </View>
+        {bassSupported ? (
+          <View
+            style={[styles.boostSliderWrap, !bassBoostEnabled && styles.dim]}
+            pointerEvents={bassBoostEnabled ? 'auto' : 'none'}
+          >
+            <Slider
+              style={styles.bandSlider}
+              minimumValue={0}
+              maximumValue={1000}
+              step={10}
+              value={bassBoostStrength}
+              disabled={!bassBoostEnabled}
+              minimumTrackTintColor={colors.primary}
+              maximumTrackTintColor={colors.border}
+              thumbTintColor={colors.primary}
+              onValueChange={previewBassBoostStrength}
+              onSlidingComplete={setBassBoostStrength}
+            />
+            <Text style={styles.boostPct}>{Math.round((bassBoostStrength / 1000) * 100)}%</Text>
+          </View>
+        ) : (
+          <Text style={styles.note}>Bass boost isn’t supported on this device.</Text>
+        )}
 
         <Text style={styles.note}>
           The equalizer adjusts your device’s audio output. Effects depend on your phone and

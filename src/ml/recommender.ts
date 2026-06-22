@@ -76,11 +76,16 @@ export function rankTracks(
     if (out.length >= count) break;
   }
 
-  // Cold-start / sparse-library fallback: top up with random unseen tracks.
+  // Cold-start / sparse-library fallback: top up with random unseen tracks
+  // (still never surfacing disliked tracks).
   if (out.length < count) {
     const have = new Set(out.map((t) => t.id));
     const rest = library.filter(
-      (t) => !have.has(t.id) && t.id !== seed?.id && !exclude?.has(t.id),
+      (t) =>
+        !have.has(t.id) &&
+        t.id !== seed?.id &&
+        !exclude?.has(t.id) &&
+        !profile.disliked[t.id],
     );
     shuffleInPlace(rest);
     for (const t of rest) {

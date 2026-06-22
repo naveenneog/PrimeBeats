@@ -36,6 +36,8 @@ type TasteState = {
   hydrate: () => Promise<void>;
   seedFromArtists: (artists: string[]) => void;
   completeOnboarding: () => void;
+  /** Marks a track as just-started so it appears in Recently Played immediately. */
+  recordStart: (track: Track) => void;
   recordPlay: (
     track: Track,
     info: { completed: boolean; playedSec: number; durationSec: number },
@@ -88,31 +90,37 @@ export const useTasteStore = create<TasteState>((set, get) => ({
     void persist({ profile: get().profile, onboardingDone: true });
   },
 
+  recordStart: (track) => {
+    if (!track?.id) return;
+    const profile = get().profile;
+    const recent = [
+      { id: track.id, at: Date.now() },
+      ...profile.recent.filter((r) => r.id !== track.id),
+    ].slice(0, RECENT_CAP);
+    const next = { ...profile, recent, updatedAt: Date.now() };
+    set({ profile: next });
+    void persist({ profile: next, onboardingDone: get().onboardingDone });
+  },
+
   recordPlay: (track, { completed, playedSec, durationSec }) => {
     const profile = get().profile;
     const artistKey = normalizeKey(track.artist);
     const albumKey = normalizeKey(track.album);
     const likedThreshold = Math.min(25, (durationSec || 0) * 0.5);
     const enjoyed = completed || playedSec >= likedThreshold;
-    const played = completed || playedSec >= 5;
 
     if (enjoyed) {
       const weight = completed ? 1 : 0.5;
       bump(profile.artist, artistKey, 1.0 * weight);
       bump(profile.album, albumKey, 0.6 * weight);
       for (const t of titleTokens(track.title)) bump(profile.token, t, 0.3 * weight);
-      if (completed) profile.plays[track.id] = (profile.plays[track.id] ?? 0) + 1;
+      // Count a play once the user has listened to a meaningful portion (not only
+      // a full play-through), so "Most Played" reflects real listening.
+      profile.plays[track.id] = (profile.plays[track.id] ?? 0) + 1;
     } else if (playedSec < 5) {
       bump(profile.artist, artistKey, -0.3);
       bump(profile.album, albumKey, -0.15);
       profile.skips[track.id] = (profile.skips[track.id] ?? 0) + 1;
-    }
-
-    if (played) {
-      profile.recent = [
-        { id: track.id, at: Date.now() },
-        ...profile.recent.filter((r) => r.id !== track.id),
-      ].slice(0, RECENT_CAP);
     }
 
     const next = { ...profile, updatedAt: Date.now() };

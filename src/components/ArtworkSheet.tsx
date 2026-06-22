@@ -5,9 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +14,7 @@ import {
   View,
 } from 'react-native';
 
+import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 import { searchArtworkByQuery, type ArtResult } from '../media/webArt';
 import { selectArt, useArtworkStore } from '../store/artworkStore';
 import { useArtworkSheetStore } from '../store/artworkSheetStore';
@@ -38,6 +37,7 @@ export function ArtworkSheet() {
   const removeArt = useArtworkStore((s) => s.remove);
   const currentArt = useArtworkStore((s) => selectArt(s, track?.id));
   const saveMetadata = useMetadataStore((s) => s.set);
+  const keyboardHeight = useKeyboardHeight();
 
   const [mode, setMode] = useState<'menu' | 'web' | 'edit'>('menu');
   const [loading, setLoading] = useState(false);
@@ -119,12 +119,11 @@ export function ArtworkSheet() {
   return (
     <Modal visible transparent animationType="slide" onRequestClose={close}>
       <Pressable style={styles.backdrop} onPress={close}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.kav}
+        <Pressable
+          style={[styles.sheet, keyboardHeight > 0 ? { marginBottom: keyboardHeight } : null]}
+          onPress={() => {}}
         >
-          <Pressable style={styles.sheet} onPress={() => {}}>
-            <View style={styles.handle} />
+          <View style={styles.handle} />
             <View style={styles.header}>
               <Image
                 source={currentArt ? { uri: currentArt } : undefined}
@@ -251,7 +250,6 @@ export function ArtworkSheet() {
               </View>
             )}
           </Pressable>
-        </KeyboardAvoidingView>
       </Pressable>
     </Modal>
   );
@@ -287,9 +285,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
-  },
-  kav: {
-    width: '100%',
   },
   sheet: {
     backgroundColor: colors.surfaceAlt,

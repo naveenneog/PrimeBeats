@@ -23,7 +23,7 @@ A polished, Amazon-Prime-Music-style **local music player for Android**, built w
 - **Equalizer & bass boost** — a graphic EQ with device presets (Flat, Rock, Pop, …), per-band sliders, and a bass-boost control, backed by a native audio-effects module. Settings are saved across launches and updates.
 - **Now Playing** — full-screen player with large art, scrubber, and all controls. **Swipe** the art to change track and **double-tap** left/right to seek ∓2s. While scrubbing, a **floating pin** shows the exact timestamp above the thumb.
 - **Edit song details** — rename a track's **title & artist** (saved as a persistent override), then auto-search album art using the full info; if nothing's found, refine the search with more details (album, year). Reach it from the track menu or the artwork editor.
-- **Drag-to-reorder** — rearrange tracks within a playlist by dragging.
+- **Drag-to-reorder** — rearrange tracks within a playlist, or drag the **upcoming songs in the queue / Smart Radio** to change what plays next.
 - **Persistent mini-player** — docked above the tab bar on every screen.
 - Dark, modern Material-inspired UI.
 
@@ -128,8 +128,14 @@ This is "Option A" (metadata + behavior). It's structured so **on-device audio a
 
 ```bash
 npx tsc --noEmit            # type-check (clean)
+npm test                    # jest-expo unit/regression suite
 npx expo export -p android  # bundle the JS to catch resolution errors
 ```
+
+Unit tests (in `src/**/__tests__/`) cover the pure logic behind the core features
+— filename parsing, the iTunes artwork search, title/artist metadata overrides,
+the Smart-Radio recommender, and the seek-pin math — so refactors don't regress
+existing behavior. Run them (and the type-check) before each release.
 
 ## 🗺️ Roadmap
 
