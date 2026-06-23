@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PrimeBeats — your music, beautifully local</title>
+    <meta
+      name="description"
+      content="PrimeBeats is an Amazon-Prime-Music-style local music player for Android: offline playback, lock-screen controls, on-device Smart Radio ML, a graphic equalizer, and more."
+    />
+    <meta property="og:title" content="PrimeBeats — your music, beautifully local" />
+    <meta
+      property="og:description"
+      content="Offline local music player for Android with on-device Smart Radio ML, equalizer, and lock-screen controls."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800;900&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0b0b0f;
+        --surface: #15151c;
+        --surface2: #1e1e28;
+        --border: #2a2a36;
+        --primary: #1fd1a0;
+        --primary-dark: #16a07c;
+        --accent: #6c5ce7;
+        --text: #ffffff;
+        --muted: #a0a0b0;
+        --faint: #6c6c7c;
+        --radius: 18px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        overflow-x: hidden;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: 'Outfit', sans-serif;
+        line-height: 1.1;
+        margin: 0;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .wrap {
+        width: min(1120px, 92vw);
+        margin: 0 auto;
+      }
+      .grad-text {
+        background: linear-gradient(100deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      /* ambient background */
+      .glow {
+        position: fixed;
+        inset: 0;
+        z-index: -2;
+        pointer-events: none;
+      }
+      .glow::before,
+      .glow::after {
+        content: '';
+        position: absolute;
+        width: 60vw;
+        height: 60vw;
+        border-radius: 50%;
+        filter: blur(120px);
+        opacity: 0.22;
+      }
+      .glow::before {
+        background: var(--primary);
+        top: -20vw;
+        left: -10vw;
+      }
+      .glow::after {
+        background: var(--accent);
+        top: 30vw;
+        right: -20vw;
+      }
+      .notes {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .notes span {
+        position: absolute;
+        bottom: -40px;
+        color: rgba(255, 255, 255, 0.06);
+        font-size: 28px;
+        animation: rise linear infinite;
+      }
+      @keyframes rise {
+        to {
+          transform: translateY(-110vh) rotate(40deg);
+          opacity: 0;
+        }
+      }
+
+      /* nav */
+      nav {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        backdrop-filter: blur(12px);
+        background: rgba(11, 11, 15, 0.72);
+        border-bottom: 1px solid var(--border);
+      }
+      nav .wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 0;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: 'Outfit', sans-serif;
+        font-weight: 800;
+        font-size: 19px;
+      }
+      .logo {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--accent), var(--primary));
+        display: grid;
+        place-items: center;
+        color: #fff;
+      }
+      .nav-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+        padding: 11px 18px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--surface2);
+        color: var(--text);
+        transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+        border-color: var(--primary);
+      }
+      .btn-primary {
+        background: linear-gradient(100deg, var(--primary), var(--primary-dark));
+        color: #04130d;
+        border: none;
+      }
+      .btn-primary:hover {
+        box-shadow: 0 10px 30px -8px rgba(31, 209, 160, 0.5);
+      }
+
+      /* hero */
+      header.hero {
+        padding: 80px 0 40px;
+        position: relative;
+      }
+      .hero-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 48px;
+        align-items: center;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 22px;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--primary);
+        box-shadow: 0 0 0 0 rgba(31, 209, 160, 0.6);
+        animation: pulse 2s infinite;
+      }
+      @keyframes pulse {
+        70% {
+          box-shadow: 0 0 0 8px rgba(31, 209, 160, 0);
+        }
+      }
+      .hero h1 {
+        font-size: clamp(40px, 6vw, 68px);
+        font-weight: 900;
+        letter-spacing: -1.5px;
+      }
+      .hero p.lead {
+        color: var(--muted);
+        font-size: clamp(16px, 2vw, 19px);
+        max-width: 36ch;
+        margin: 20px 0 30px;
+      }
+      .cta-row {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .equalizer {
+        display: flex;
+        align-items: flex-end;
+        gap: 6px;
+        height: 26px;
+        margin-left: 4px;
+      }
+      .equalizer i {
+        width: 5px;
+        border-radius: 3px;
+        background: linear-gradient(var(--primary), var(--accent));
+        animation: eq 1s ease-in-out infinite;
+      }
+      .equalizer i:nth-child(1) {
+        animation-delay: -0.4s;
+      }
+      .equalizer i:nth-child(2) {
+        animation-delay: -0.8s;
+      }
+      .equalizer i:nth-child(3) {
+        animation-delay: -0.2s;
+      }
+      .equalizer i:nth-child(4) {
+        animation-delay: -0.6s;
+      }
+      .equalizer i:nth-child(5) {
+        animation-delay: -1s;
+      }
+      @keyframes eq {
+        0%,
+        100% {
+          height: 8px;
+        }
+        50% {
+          height: 26px;
+        }
+      }
+
+      /* phone */
+      .phone {
+        position: relative;
+        width: 100%;
+        max-width: 320px;
+        margin: 0 auto;
+        border-radius: 36px;
+        padding: 10px;
+        background: linear-gradient(160deg, #20202b, #101015);
+        border: 1px solid var(--border);
+        box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+      }
+      .phone img {
+        width: 100%;
+        display: block;
+        border-radius: 28px;
+      }
+      .hero .phone {
+        transform: rotate(2deg);
+        transition: transform 0.4s ease;
+      }
+      .hero .phone:hover {
+        transform: rotate(0) translateY(-6px);
+      }
+
+      /* sections */
+      section {
+        padding: 72px 0;
+      }
+      .eyebrow {
+        color: var(--primary);
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        font-size: 13px;
+      }
+      .section-head {
+        text-align: center;
+        max-width: 640px;
+        margin: 0 auto 48px;
+      }
+      .section-head h2 {
+        font-size: clamp(28px, 4vw, 42px);
+        font-weight: 800;
+        margin: 12px 0;
+      }
+      .section-head p {
+        color: var(--muted);
+        margin: 0;
+      }
+
+      /* screenshots */
+      .shots {
+        display: flex;
+        gap: 26px;
+        overflow-x: auto;
+        padding: 10px 4px 26px;
+        scroll-snap-type: x mandatory;
+      }
+      .shot {
+        scroll-snap-align: center;
+        flex: 0 0 auto;
+        width: 250px;
+        text-align: center;
+      }
+      .shot .phone {
+        transition: transform 0.3s ease;
+      }
+      .shot:hover .phone {
+        transform: translateY(-8px);
+      }
+      .shot .cap {
+        margin-top: 16px;
+        font-weight: 700;
+        font-family: 'Outfit', sans-serif;
+      }
+      .shot .sub {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      /* features */
+      .features {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+      }
+      .card {
+        background: linear-gradient(180deg, var(--surface), #101016);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 26px 24px;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+      }
+      .card:hover {
+        transform: translateY(-4px);
+        border-color: var(--primary);
+      }
+      .ic {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        margin-bottom: 16px;
+        background: rgba(31, 209, 160, 0.12);
+        color: var(--primary);
+      }
+      .card.alt .ic {
+        background: rgba(108, 92, 231, 0.16);
+        color: #b3a7ff;
+      }
+      .card h3 {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        font-family: 'Outfit', sans-serif;
+      }
+      .card p {
+        color: var(--muted);
+        font-size: 14.5px;
+        margin: 0;
+      }
+
+      /* download */
+      .download {
+        text-align: center;
+        background: radial-gradient(120% 140% at 50% 0%, rgba(108, 92, 231, 0.18), transparent 60%);
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+      }
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        max-width: 760px;
+        margin: 36px auto 0;
+        text-align: left;
+      }
+      .step {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px 20px;
+      }
+      .step b {
+        color: var(--primary);
+        font-family: 'Outfit', sans-serif;
+      }
+      .note-line {
+        color: var(--faint);
+        font-size: 13px;
+        margin-top: 26px;
+      }
+
+      footer {
+        padding: 40px 0 60px;
+        text-align: center;
+        color: var(--faint);
+        font-size: 13.5px;
+      }
+      footer a {
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+      }
+
+      @media (max-width: 860px) {
+        .hero-grid {
+          grid-template-columns: 1fr;
+          text-align: center;
+        }
+        .hero p.lead {
+          margin-left: auto;
+          margin-right: auto;
+        }
+        .cta-row {
+          justify-content: center;
+        }
+        .hero .phone {
+          margin-top: 30px;
+          max-width: 280px;
+        }
+        .features {
+          grid-template-columns: 1fr;
+        }
+        .steps {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="notes" id="notes" aria-hidden="true"></div>
+
+    <nav>
+      <div class="wrap">
+        <div class="brand">
+          <span class="logo">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+              <path
+                d="M6 14a2 2 0 11-2-2 2 2 0 012 2zm8-2a2 2 0 11-2-2 2 2 0 012 2zM6 12V4l8-2v8"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
+          PrimeBeats
+        </div>
+        <div class="nav-actions">
+          <a class="btn" href="https://github.com/naveenneog/PrimeBeats" target="_blank" rel="noopener">GitHub</a>
+          <a
+            class="btn btn-primary"
+            href="https://github.com/naveenneog/PrimeBeats/releases/latest"
+            target="_blank"
+            rel="noopener"
+            >Download APK</a
+          >
+        </div>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <span class="badge"><span class="dot"></span> v1.7.0 · Android · 100% offline</span>
+          <h1>Your music,<br /><span class="grad-text">beautifully local.</span></h1>
+          <p class="lead">
+            An Amazon-Prime-Music-style player for the songs already on your phone — with on-device
+            Smart&nbsp;Radio, a real equalizer, and lock-screen control. No account, no ads.
+          </p>
+          <div class="cta-row">
+            <a
+              class="btn btn-primary"
+              href="https://github.com/naveenneog/PrimeBeats/releases/latest"
+              target="_blank"
+              rel="noopener"
+            >
+              ↓ Download the APK
+            </a>
+            <a class="btn" href="#features">Explore features</a>
+            <div class="equalizer" aria-hidden="true">
+              <i></i><i></i><i></i><i></i><i></i>
+            </div>
+          </div>
+        </div>
+        <div class="phone">
+          <img src="screenshots/now-playing.svg" alt="PrimeBeats Now Playing screen" />
+        </div>
+      </div>
+    </header>
+
+    <section id="screens">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="eyebrow">A look inside</div>
+          <h2>Designed for listening</h2>
+          <p>A dark, modern interface built around your library and your taste.</p>
+        </div>
+        <div class="shots">
+          <div class="shot">
+            <div class="phone"><img src="screenshots/now-playing.svg" alt="Now Playing" /></div>
+            <div class="cap">Now Playing</div>
+            <div class="sub">Swipe & double-tap gestures</div>
+          </div>
+          <div class="shot">
+            <div class="phone"><img src="screenshots/library.svg" alt="Library" /></div>
+            <div class="cap">Your Library</div>
+            <div class="sub">Songs, albums, search, mini-player</div>
+          </div>
+          <div class="shot">
+            <div class="phone"><img src="screenshots/smart-radio.svg" alt="Smart Radio queue" /></div>
+            <div class="cap">Smart Radio</div>
+            <div class="sub">On-device ML auto-queue</div>
+          </div>
+          <div class="shot">
+            <div class="phone"><img src="screenshots/equalizer.svg" alt="Equalizer" /></div>
+            <div class="cap">Equalizer</div>
+            <div class="sub">Presets, bands & bass boost</div>
+          </div>
+          <div class="shot">
+            <div class="phone"><img src="screenshots/playlists.svg" alt="Playlists" /></div>
+            <div class="cap">Playlists</div>
+            <div class="sub">Smart + your own, reorderable</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="eyebrow">Everything it does</div>
+          <h2>Features that hit the right note</h2>
+          <p>All on-device. Your library, playlists and taste never leave your phone.</p>
+        </div>
+        <div class="features">
+          <div class="card">
+            <div class="ic">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            </div>
+            <h3>Local library scan</h3>
+            <p>Finds every track on your device and organizes it by album and folder, with instant search and a persistent mini-player.</p>
+          </div>
+          <div class="card">
+            <div class="ic">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 8l7 4-7 4z" fill="currentColor" stroke="none"/></svg>
+            </div>
+            <h3>Background & lock-screen</h3>
+            <p>Keeps playing when you switch apps or lock the phone, with full notification and lock-screen controls — next, previous, play/pause.</p>
+          </div>
+          <div class="card alt">
+            <div class="ic">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4v7a8 8 0 0016 0V4"/><circle cx="12" cy="11" r="3"/></svg>
+            </div>
+            <h3>Smart Radio (on-device ML)</h3>
+            <p>An endless auto-queue that picks similar songs from the current track and your learned taste — with exploration and per-artist variety. Fully offline.</p>
+          </div>
+          <div class="card">
+            <div class="ic">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+            </div>
+            <h3>Equalizer & bass boost</h3>
+            <p>A graphic EQ with device presets (Flat, Rock, Pop, Jazz…), per-band sliders in dB, and a dedicated bass-boost control. Settings persist across updates.</p>
+          </div>
+          <div class="card">
+            <div class="ic">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 20l9-5-9-5-9 5 9 5z"/><path d="M12 12V4l5 2"/></svg>
+            </div>
+            <h3>Gestures & progressive seek</h3>
+            <p>Swipe the artwork to change track; double-tap and keep tapping a side to jump progressively further (+2, +2, +3, +4, +5s) with an on-screen flash.</p>
+          </div>
+          <div class="card alt">
+            <div class="ic">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>
+            </div>
+            <h3>Make it yours</h3>
+            <p>Rename a song's title & artist, fetch or upload custom album art, drag to reorder playlists and the up-next queue, and hide recordings — all saved across updates.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="download" id="download">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="eyebrow">Get it</div>
+          <h2>Install on your phone</h2>
+          <p>Sideload the signed APK — no Play Store needed.</p>
+        </div>
+        <a
+          class="btn btn-primary"
+          style="font-size: 16px; padding: 14px 26px"
+          href="https://github.com/naveenneog/PrimeBeats/releases/latest"
+          target="_blank"
+          rel="noopener"
+          >↓ Download the latest APK</a
+        >
+        <div class="steps">
+          <div class="step"><b>1.</b> Download <b>PrimeBeats.apk</b> from the latest release on your Android phone.</div>
+          <div class="step"><b>2.</b> Open it and allow <b>“install unknown apps”</b> for your browser or files app.</div>
+          <div class="step"><b>3.</b> Launch PrimeBeats and grant the <b>audio/media</b> permission so it can scan your music.</div>
+        </div>
+        <p class="note-line">
+          Built with Expo · React Native · TypeScript · react-native-track-player · a native Kotlin
+          audio-effects module. Updates keep your playlists, taste, custom art and EQ settings.
+        </p>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        PrimeBeats is an open, non-commercial hobby project ·
+        <a href="https://github.com/naveenneog/PrimeBeats" target="_blank" rel="noopener">source on GitHub</a>
+        · plays only the audio files you already own.
+      </div>
+    </footer>
+
+    <script>
+      // floating music notes
+      (function () {
+        const glyphs = ['♪', '♫', '♬', '♩', '𝄞'];
+        const host = document.getElementById('notes');
+        const n = window.innerWidth < 700 ? 10 : 18;
+        for (let i = 0; i < n; i++) {
+          const s = document.createElement('span');
+          s.textContent = glyphs[i % glyphs.length];
+          s.style.left = Math.random() * 100 + 'vw';
+          s.style.fontSize = 18 + Math.random() * 34 + 'px';
+          const dur = 14 + Math.random() * 16;
+          s.style.animationDuration = dur + 's';
+          s.style.animationDelay = -Math.random() * dur + 's';
+          host.appendChild(s);
+        }
+      })();
+    </script>
+  </body>
+</html>
