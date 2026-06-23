@@ -1,4 +1,4 @@
-import { SEEK_PIN_WIDTH, seekPinLeft } from '../seek';
+import { SEEK_PIN_WIDTH, progressiveSeekStep, seekPinLeft } from '../seek';
 
 const WIDTH = 300;
 
@@ -32,5 +32,22 @@ describe('seekPinLeft', () => {
       expect(left).toBeGreaterThanOrEqual(0);
       expect(left).toBeLessThanOrEqual(WIDTH - SEEK_PIN_WIDTH);
     }
+  });
+});
+
+describe('progressiveSeekStep', () => {
+  it('follows the 2,2,3,4,5 progression', () => {
+    expect([1, 2, 3, 4, 5, 6].map(progressiveSeekStep)).toEqual([2, 2, 3, 4, 5, 6]);
+  });
+
+  it('produces cumulative jumps of +2,+2,+3,+4,+5', () => {
+    let total = 0;
+    const cumulative = [1, 2, 3, 4, 5].map((n) => (total += progressiveSeekStep(n)));
+    expect(cumulative).toEqual([2, 4, 7, 11, 16]);
+  });
+
+  it('guards a non-positive tap index', () => {
+    expect(progressiveSeekStep(0)).toBe(0);
+    expect(progressiveSeekStep(-3)).toBe(0);
   });
 });

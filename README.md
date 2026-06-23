@@ -2,6 +2,8 @@
 
 A polished, Amazon-Prime-Music-style **local music player for Android**, built with Expo (React Native + TypeScript). It streams audio from your device's storage, builds a browsable library with album/folder grouping, lets you create and manage playlists, and supports **background playback with lock-screen / notification controls**.
 
+🌐 **Website:** https://naveenneog.github.io/PrimeBeats/ · 📦 **Download:** [latest APK](https://github.com/naveenneog/PrimeBeats/releases/latest)
+
 > Built on **Expo SDK 54** so it runs in the current **Expo Go** app. Background playback + lock-screen controls require a standalone/dev build (Expo Go can't run the media foreground service).
 
 > **Note on YouTube:** A YouTube "audio-only + ad-blocking" mode was intentionally **not** built — extracting audio-only streams and blocking ads violates YouTube's Terms of Service. This app focuses on your own local music. See [Roadmap](#roadmap) for the compliant way to add YouTube later.
@@ -21,7 +23,7 @@ A polished, Amazon-Prime-Music-style **local music player for Android**, built w
 - **Search** — instant filtering across songs, artists, and albums.
 - **Album art** — uses custom/web-downloaded art when available, with colorful deterministic generated cover tiles as a fallback. Tap a track's art to **find art on the web** (iTunes) or **upload your own** (see [Album art](#album-art)).
 - **Equalizer & bass boost** — a graphic EQ with device presets (Flat, Rock, Pop, …), per-band sliders, and a bass-boost control, backed by a native audio-effects module. Settings are saved across launches and updates.
-- **Now Playing** — full-screen player with large art, scrubber, and all controls. **Swipe** the art to change track and **double-tap** left/right to seek ∓2s. While scrubbing, a **floating pin** shows the exact timestamp above the thumb.
+- **Now Playing** — full-screen player with large art, scrubber, and all controls. **Swipe** the art to change track, **tap the bar** to seek, and **double-tap then keep tapping** a side to jump progressively further (+2, +2, +3, +4, +5 … seconds) with an on-screen flash.
 - **Edit song details** — rename a track's **title & artist** (saved as a persistent override), then auto-search album art using the full info; if nothing's found, refine the search with more details (album, year). Reach it from the track menu or the artwork editor.
 - **Drag-to-reorder** — rearrange tracks within a playlist, or drag the **upcoming songs in the queue / Smart Radio** to change what plays next.
 - **Persistent mini-player** — docked above the tab bar on every screen.

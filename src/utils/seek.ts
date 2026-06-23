@@ -22,3 +22,13 @@ export function seekPinLeft(
   const thumbCenter = thumbRadius + frac * Math.max(0, width - thumbRadius * 2);
   return Math.min(Math.max(thumbCenter - pinWidth / 2, 0), Math.max(0, width - pinWidth));
 }
+
+/**
+ * Seconds to jump for the Nth consecutive seek-tap in a burst. The step grows
+ * with each tap so repeated taps cover more ground: 2, 2, 3, 4, 5, 6 … which
+ * makes the cumulative offset jump by +2, +2, +3, +4, +5 …
+ */
+export function progressiveSeekStep(tapIndex: number): number {
+  if (tapIndex < 1) return 0;
+  return Math.max(2, Math.floor(tapIndex));
+}

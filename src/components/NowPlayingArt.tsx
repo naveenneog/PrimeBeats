@@ -4,6 +4,7 @@ import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react
 
 import { radius, colors, spacing } from '../theme';
 import type { Track } from '../types';
+import { progressiveSeekStep } from '../utils/seek';
 import { ArtTile } from './ArtTile';
 
 type Props = {
@@ -15,13 +16,19 @@ type Props = {
   onEditArtwork: () => void;
 };
 
-const SEEK_STEP = 2;
 const SWIPE_THRESHOLD = 45;
+const DOUBLE_TAP_MS = 280;
+/** Keep advancing a seek burst with single taps for this long after the last tap. */
+const BURST_WINDOW = 1300;
+
+type Burst = { side: 'left' | 'right'; count: number; total: number; lastTime: number };
 
 /**
  * Now-Playing artwork with gestures:
  * - horizontal **swipe** → previous / next track,
- * - **double-tap** the right/left half → seek +2s / −2s (with a flash),
+ * - **double-tap** the right/left half → seek forward / back, then **keep tapping**
+ *   that side to jump progressively further (+2, +2, +3, +4, +5 … seconds) with a
+ *   flash showing the cumulative offset,
  * - a corner button to change the artwork.
  * Built on PanResponder + Animated (no reanimated; old-arch safe).
  */
@@ -29,6 +36,7 @@ export function NowPlayingArt({ track, size, onNext, onPrevious, onSeekBy, onEdi
   const translateX = useRef(new Animated.Value(0)).current;
   const flashOpacity = useRef(new Animated.Value(0)).current;
   const lastTap = useRef<{ side: 'left' | 'right'; time: number } | null>(null);
+  const burst = useRef<Burst | null>(null);
   const [flash, setFlash] = useState<{ side: 'left' | 'right'; text: string } | null>(null);
 
   const pan = useRef(
@@ -50,28 +58,44 @@ export function NowPlayingArt({ track, size, onNext, onPrevious, onSeekBy, onEdi
     }),
   ).current;
 
-  const showFlash = (side: 'left' | 'right', text: string) => {
-    setFlash({ side, text });
+  const showFlash = (side: 'left' | 'right', totalSeconds: number) => {
+    setFlash({ side, text: `${side === 'right' ? '+' : '−'}${totalSeconds}s` });
     flashOpacity.setValue(1);
-    Animated.timing(flashOpacity, { toValue: 0, duration: 700, useNativeDriver: true }).start(
+    Animated.timing(flashOpacity, { toValue: 0, duration: 900, useNativeDriver: true }).start(
       ({ finished }) => {
         if (finished) setFlash(null);
       },
     );
   };
 
+  const seek = (side: 'left' | 'right', count: number): number => {
+    const step = progressiveSeekStep(count);
+    onSeekBy(side === 'right' ? step : -step);
+    return step;
+  };
+
   const handleTap = (side: 'left' | 'right') => {
     const now = Date.now();
+    const active = burst.current;
+
+    // While a burst is active, every single tap on the same side advances it.
+    if (active && active.side === side && now - active.lastTime < BURST_WINDOW) {
+      const count = active.count + 1;
+      const step = seek(side, count);
+      active.count = count;
+      active.total += step;
+      active.lastTime = now;
+      showFlash(side, active.total);
+      return;
+    }
+
+    // Otherwise a double-tap is required to start a new burst.
     const prev = lastTap.current;
-    if (prev && prev.side === side && now - prev.time < 280) {
+    if (prev && prev.side === side && now - prev.time < DOUBLE_TAP_MS) {
       lastTap.current = null;
-      if (side === 'left') {
-        onSeekBy(-SEEK_STEP);
-        showFlash('left', `−${SEEK_STEP}s`);
-      } else {
-        onSeekBy(SEEK_STEP);
-        showFlash('right', `+${SEEK_STEP}s`);
-      }
+      const step = seek(side, 1);
+      burst.current = { side, count: 1, total: step, lastTime: now };
+      showFlash(side, step);
     } else {
       lastTap.current = { side, time: now };
     }
