@@ -11,6 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { ArtworkSheet } from './src/components/ArtworkSheet';
+import { CarMedia } from './src/native/carMedia';
 import { prefetchEmbeddedArt } from './src/media/embeddedArt';
 import { useArtworkStore } from './src/store/artworkStore';
 import { useEqStore } from './src/store/eqStore';
@@ -68,6 +69,12 @@ export default function App() {
       void prefetchEmbeddedArt(useLibraryStore.getState().allTracks);
     }
   }, [libraryStatus]);
+
+  // Keep the Android Auto media browser's library snapshot in sync.
+  const visibleTracks = useLibraryStore((s) => s.tracks);
+  useEffect(() => {
+    if (visibleTracks.length) CarMedia.setLibrary(visibleTracks);
+  }, [visibleTracks]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

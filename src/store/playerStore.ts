@@ -10,6 +10,7 @@ import { create } from 'zustand';
 
 import { recommendNext } from '../ml/recommender';
 import type { RepeatMode, Track } from '../types';
+import { matchTrackIndex } from '../utils/search';
 import { useLibraryStore } from './libraryStore';
 import { useTasteStore } from './tasteStore';
 
@@ -200,6 +201,17 @@ usePlayerStore.subscribe((state) => {
     useTasteStore.getState().recordStart(current);
   }
 });
+
+/** Plays a track matching a (voice) search query; falls back to another song. */
+function doPlayFromSearch(query: string): void {
+  const library = useLibraryStore.getState().tracks;
+  if (library.length === 0) return;
+  const match = matchTrackIndex(library, query);
+  // Found the requested song → play it; otherwise fall back to another song so
+  // playback always starts.
+  const index = match >= 0 ? match : Math.floor(Math.random() * library.length);
+  void doPlayFrom(library, index);
+}
 
 async function doReorderQueue(from: number, to: number): Promise<void> {
   const { queue, currentIndex } = usePlayerStore.getState();
@@ -406,6 +418,13 @@ function attachListeners(): void {
       void maybeExtendRadio();
     }
   });
+
+  // Voice "play <song> from PrimeBeats" (Android Auto / Assistant) when our RNTP
+  // session is the active one. The car-side browse service handles the cold path.
+  TrackPlayer.addEventListener(Event.RemotePlaySearch, (event) => {
+    const query = event && typeof event.query === 'string' ? event.query : '';
+    doPlayFromSearch(query);
+  });
 }
 
 /**
@@ -416,7 +435,7 @@ function attachListeners(): void {
 export async function initPlayer(): Promise<void> {
   if (setupDone) return;
   try {
-    await TrackPlayer.setupPlayer();
+    await TrackPlayer.setupPlayer({ autoHandleInterruptions: true });
   } catch {
     // setupPlayer throws if already initialized (e.g. fast refresh); ignore.
   }
@@ -432,6 +451,7 @@ export async function initPlayer(): Promise<void> {
       Capability.SkipToPrevious,
       Capability.SeekTo,
       Capability.Stop,
+      Capability.PlayFromSearch,
     ],
     compactCapabilities: [
       Capability.Play,

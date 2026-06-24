@@ -136,7 +136,37 @@ the app's playback without needing the player's session id.
 
 ---
 
-## 6. Debugging playbook
+## 6. Android Auto (`carmedia` module)
+
+RNTP's service is a `HeadlessJsTaskService`, **not** a `MediaBrowserService`, so
+it can't power Android Auto. PrimeBeats adds its own Auto entry point: a local
+Expo module `modules/carmedia` containing a legacy `MediaBrowserServiceCompat`
+(`PrimeBeatsMediaService`).
+
+- **Discovery:** the module manifest declares the service with the
+  `android.media.browse.MediaBrowserService` intent-filter and the
+  `com.google.android.gms.car.application` meta-data → `res/xml/automotive_app_desc.xml`
+  (`<uses name="media"/>`). These merge into the app manifest.
+- **Library snapshot:** JS pushes the visible library to native via
+  `CarMedia.setLibrary(tracks)` (App.tsx, on every `libraryStore.tracks` change).
+  `CarMediaModule.setLibrary` writes it to `filesDir/primebeats_carlib.json`, so
+  the service can browse/search/play even when the car starts it **cold**.
+- **Browse tree:** root → "Songs" → each track (FLAG_PLAYABLE, mediaId = track id).
+- **Playback:** the service has its **own** `MediaPlayer` + `MediaSessionCompat`
+  + `AudioManager` focus + a MediaStyle foreground notification. It's independent
+  of RNTP; audio focus stops the two playing at once (RNTP `autoHandleInterruptions`).
+- **Voice:** `onPlayFromSearch(query)` → `findMatch` (mirrors the JS
+  `matchTrackIndex`) → play the match, else **fall back to another song**.
+  `onPlayFromMediaId` plays a tapped item. RNTP also handles `RemotePlaySearch`
+  (`Capability.PlayFromSearch`) for when *its* session is the active one.
+- **Testing:** Auto only lists Play-Store apps unless you enable
+  **Android Auto → Developer settings → "Unknown sources"**; then use a head unit
+  or the Desktop Head Unit (DHU). Open the app once after install so the snapshot
+  exists. In-app vs Auto playback state aren't mirrored in this first version.
+
+---
+
+## 7. Debugging playbook
 
 | Symptom | Where to look |
 | --- | --- |
@@ -157,6 +187,9 @@ the app's playback without needing the player's session id.
 | EQ sliders editable while master off | Native `Slider` ignores a parent's `pointerEvents="none"` — pass `disabled={!enabled}` to each slider/preset instead. |
 | Bass boost inaudible | Strength defaults to 0; `eqStore.setBassBoostEnabled` applies a default strength (600/1000) when first enabled. Some devices report `bassBoostSupported:false` (UI hides it). |
 | Queue reorder doesn't stick | `reorderQueue(from,to)` updates the mirror + `TrackPlayer.move`; current index is recomputed by track id. If native `move` throws, the next track change re-syncs. |
+| App doesn't appear in Android Auto | Auto only lists Play-Store apps by default — enable **Developer settings → "Unknown sources"** in the Android Auto app. Then check the merged manifest has `PrimeBeatsMediaService` + the `com.google.android.gms.car.application` meta-data (`modules/carmedia`). |
+| Voice "play X from PrimeBeats" plays the wrong/over a song | `carmedia` reads the JSON library snapshot from `filesDir/primebeats_carlib.json` (written by `CarMedia.setLibrary` on every library change). If empty, the app hasn't run since install — open it once. Matching is `matchTrackIndex` (tested); no match → falls back to another song by design. |
+| Auto playback and phone playback fight | They're separate sessions (carmedia uses its own `MediaPlayer`; in-app uses RNTP). Android **audio focus** arbitrates — RNTP has `autoHandleInterruptions:true` so it pauses when the car service takes focus. |
 
 ### Tools
 - **Type-check:** `npx tsc --noEmit`
@@ -172,7 +205,7 @@ the app's playback without needing the player's session id.
 
 ---
 
-## 7. Build & release (local, no EAS)
+## 8. Build & release (local, no EAS)
 
 The standalone APK is built on a machine with JDK 17 + Android SDK (see README).
 
@@ -195,7 +228,7 @@ Notes:
 
 ---
 
-## 8. Directory map
+## 9. Directory map
 
 ```
 src/
@@ -203,7 +236,7 @@ src/
   store/         library/playlist/taste/settings/metadata/artwork/eq/player (zustand)
   player/        playbackService.ts                     (RNTP lock-screen service)
   media/         scanner.ts, embeddedArt.ts, webArt.ts  (scan + artwork sources)
-  native/        equalizer.ts                           (crash-proof EQ bridge)
+  native/        equalizer.ts, carMedia.ts              (crash-proof native bridges)
   hooks/         useKeyboardHeight.ts                   (lift sheets over keyboard)
   navigation/    RootNavigator, Tabs, types
   components/    ArtTile, TrackRow, TrackList, MiniPlayer, TrackActionsSheet,
@@ -212,10 +245,11 @@ src/
   screens/       Home, Songs, Albums, AlbumDetail, Playlists, PlaylistDetail,
                  SmartPlaylist, Search, NowPlaying, AddToPlaylist, Onboarding,
                  Settings, ManageHidden, Queue, Equalizer
-  utils/         format.ts, seek.ts
+  utils/         format.ts, seek.ts, search.ts
   **/__tests__/  jest-expo unit tests (run with `npm test`)
   theme.ts, types.ts
 modules/
   equalizer/     Expo local native module (Kotlin EQ + BassBoost)
+  carmedia/      Expo local native module (Android Auto MediaBrowserService)
 App.tsx, index.ts
 ```

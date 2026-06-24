@@ -1,0 +1,24 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.primebeats.carmedia'
+version = '0.1.0'
+
+android {
+  namespace "com.primebeats.carmedia"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // Legacy media-compat: provides MediaBrowserServiceCompat + MediaSessionCompat,
+  // the canonical surface Android Auto / Assistant connect to.
+  implementation "androidx.media:media:1.7.0"
+}
