@@ -1,12 +1,20 @@
 import { registerWebModule, NativeModule } from 'expo';
 
-class CarMediaModule extends NativeModule {
+type CarMediaEvents = {
+  onCarPlayback: (state: { active: boolean }) => void;
+};
+
+class CarMediaModule extends NativeModule<CarMediaEvents> {
   isSupported(): boolean {
     return false;
   }
   setLibrary(_json: string): boolean {
     return false;
   }
+  getNowPlaying(): null {
+    return null;
+  }
+  sendCommand(_command: string): void {}
 }
 
 export default registerWebModule(CarMediaModule, 'CarMediaModule');

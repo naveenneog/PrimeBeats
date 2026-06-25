@@ -148,22 +148,33 @@ Expo module `modules/carmedia` containing a legacy `MediaBrowserServiceCompat`
   `android.media.browse.MediaBrowserService` intent-filter and the
   `com.google.android.gms.car.application` meta-data → `res/xml/automotive_app_desc.xml`
   (`<uses name="media"/>`). These merge into the app manifest.
-- **Library snapshot:** JS pushes the visible library to native via
-  `CarMedia.setLibrary(tracks)` (App.tsx, on every `libraryStore.tracks` change).
-  `CarMediaModule.setLibrary` writes it to `filesDir/primebeats_carlib.json`, so
-  the service can browse/search/play even when the car starts it **cold**.
-- **Browse tree:** root → "Songs" → each track (FLAG_PLAYABLE, mediaId = track id).
+- **Library snapshot:** JS pushes a structured snapshot — `{ songs, playlists,
+  smart }` — via `CarMedia.setLibrary(snapshot)` (built in `media/carSnapshot.ts`,
+  debounced; pushed on library/playlist/taste changes). `CarMediaModule.setLibrary`
+  writes it to `filesDir/primebeats_carlib.json`, so the service can
+  browse/search/play even when the car starts it **cold**.
+- **Browse tree:** root → **Made for You / Most Played / Recently Played**
+  (smart, non-empty only) → **Playlists** → each playlist → **All Songs**. Items
+  use **hierarchy media ids** `"<listId>|<trackId>"` so playing from a list sets
+  that list as the queue (so next/prev follow the list, not the whole library).
+  `resolveList` maps `songs` / `smart:<id>` / `playlist:<id>` → tracks.
 - **Playback:** the service has its **own** `MediaPlayer` + `MediaSessionCompat`
   + `AudioManager` focus + a MediaStyle foreground notification. It's independent
   of RNTP; audio focus stops the two playing at once (RNTP `autoHandleInterruptions`).
 - **Voice:** `onPlayFromSearch(query)` → `findMatch` (mirrors the JS
   `matchTrackIndex`) → play the match, else **fall back to another song**.
-  `onPlayFromMediaId` plays a tapped item. RNTP also handles `RemotePlaySearch`
+  `onPlayFromMediaId` parses `listId|trackId`. RNTP also handles `RemotePlaySearch`
   (`Capability.PlayFromSearch`) for when *its* session is the active one.
+- **Phone ↔ car sync:** the service publishes state through `CarPlaybackBus`;
+  `CarMediaModule` relays it as the `onCarPlayback` event (+ `getNowPlaying`,
+  `sendCommand`). `carStore` mirrors it: the root-level **`CarBanner`** shows
+  what's playing in the car with play/pause/next/stop (forwarded via `sendCommand`)
+  and the in-app RNTP engine is paused while the car has focus. When the user
+  plays on the phone, the banner hands off.
 - **Testing:** Auto only lists Play-Store apps unless you enable
   **Android Auto → Developer settings → "Unknown sources"**; then use a head unit
   or the Desktop Head Unit (DHU). Open the app once after install so the snapshot
-  exists. In-app vs Auto playback state aren't mirrored in this first version.
+  exists.
 
 ---
 
@@ -262,15 +273,15 @@ Notes:
 ```
 src/
   ml/            features.ts, recommender.ts            (recommendation engine)
-  store/         library/playlist/taste/settings/metadata/artwork/eq/imported/player
+  store/         library/playlist/taste/settings/metadata/artwork/eq/imported/car/player
   player/        playbackService.ts                     (RNTP lock-screen service)
-  media/         scanner.ts, embeddedArt.ts, webArt.ts, shareImport.ts
+  media/         scanner.ts, embeddedArt.ts, webArt.ts, shareImport.ts, carSnapshot.ts
   native/        equalizer.ts, carMedia.ts, shareIn.ts  (crash-proof native bridges)
   hooks/         useKeyboardHeight.ts                   (lift sheets over keyboard)
   navigation/    RootNavigator, Tabs, types
   components/    ArtTile, TrackRow, TrackList, MiniPlayer, TrackActionsSheet,
                  NowPlayingArt, ReorderablePlaylist, ReorderableQueue, ArtworkSheet,
-                 SeekBar, TopBar, Header, States, TextPromptModal
+                 SeekBar, CarBanner, TopBar, Header, States, TextPromptModal
   screens/       Home, Songs, Albums, AlbumDetail, Playlists, PlaylistDetail,
                  SmartPlaylist, Search, NowPlaying, AddToPlaylist, Onboarding,
                  Settings, ManageHidden, Queue, Equalizer, ShareMusic

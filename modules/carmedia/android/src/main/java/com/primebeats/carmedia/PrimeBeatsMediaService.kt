@@ -23,6 +23,7 @@ import androidx.media.MediaBrowserServiceCompat
 import androidx.media.app.NotificationCompat.MediaStyle
 import androidx.media.session.MediaButtonReceiver
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 
 /** A single browsable/playable track, mirrored from the JS library snapshot. */
@@ -34,22 +35,48 @@ data class CarTrack(
   val uri: String,
 )
 
+/** A named group of track ids (a playlist or a smart playlist). */
+data class CarGroup(val id: String, val name: String, val trackIds: List<String>)
+
+/** The full browseable snapshot pushed from JS. */
+data class CarSnapshot(
+  val songs: List<CarTrack>,
+  val byId: Map<String, CarTrack>,
+  val playlists: List<CarGroup>,
+  val smart: List<CarGroup>,
+)
+
+/**
+ * Bridges car playback state to the JS module (when the app process is alive) so
+ * the phone UI can mirror what's playing in the car.
+ */
+object CarPlaybackBus {
+  var onState: ((Map<String, Any?>) -> Unit)? = null
+  var latest: Map<String, Any?>? = null
+  fun emit(state: Map<String, Any?>) {
+    latest = state
+    onState?.invoke(state)
+  }
+}
+
 /**
  * MediaBrowserService that exposes the PrimeBeats library to Android Auto /
- * Google Assistant and plays local files. It reads a library snapshot written by
- * JS (CarMediaModule) so it can serve content and answer voice "play X from
- * PrimeBeats" requests even when started cold by the car.
- *
- * Playback here is independent of the in-app player; Android audio focus keeps
- * the two from playing at once.
+ * Google Assistant and plays local files. It reads a JSON snapshot written by
+ * JS (CarMediaModule) — songs, playlists and smart playlists — so it can browse,
+ * search and play even when started cold by the car. Playback state is published
+ * via [CarPlaybackBus] so the running app can stay in sync.
  */
 class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
   companion object {
     const val ROOT_ID = "primebeats_root"
-    const val SONGS_ID = "primebeats_songs"
+    const val SONGS_ID = "songs"
+    const val PLAYLISTS_ID = "playlists_root"
     const val LIB_FILE = "primebeats_carlib.json"
     const val CHANNEL_ID = "primebeats_auto"
     const val NOTIFICATION_ID = 4242
+
+    /** Live instance so the module can forward transport commands from the app. */
+    var instance: PrimeBeatsMediaService? = null
   }
 
   private lateinit var session: MediaSessionCompat
@@ -73,6 +100,7 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
 
   override fun onCreate() {
     super.onCreate()
+    instance = this
     audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
     val activityIntent = packageManager.getLaunchIntentForPackage(packageName)
@@ -98,7 +126,6 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
     clientUid: Int,
     rootHints: Bundle?,
   ): BrowserRoot {
-    // Allow any caller (Auto, Assistant, the app itself) to browse.
     return BrowserRoot(ROOT_ID, null)
   }
 
@@ -106,57 +133,120 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
     parentId: String,
     result: Result<MutableList<MediaBrowserCompat.MediaItem>>,
   ) {
+    val snap = loadSnapshot()
     val items = ArrayList<MediaBrowserCompat.MediaItem>()
-    when (parentId) {
-      ROOT_ID -> {
-        val desc = MediaDescriptionCompat.Builder()
-          .setMediaId(SONGS_ID)
-          .setTitle("Songs")
-          .build()
-        items.add(MediaBrowserCompat.MediaItem(desc, MediaBrowserCompat.MediaItem.FLAG_BROWSABLE))
-      }
-      SONGS_ID -> {
-        for (t in loadLibrary()) {
-          val desc = MediaDescriptionCompat.Builder()
-            .setMediaId(t.id)
-            .setTitle(t.title)
-            .setSubtitle(t.artist)
-            .build()
-          items.add(MediaBrowserCompat.MediaItem(desc, MediaBrowserCompat.MediaItem.FLAG_PLAYABLE))
+
+    when {
+      parentId == ROOT_ID -> {
+        // Smart playlists first, then user playlists, then all songs.
+        for (g in snap.smart) {
+          if (g.trackIds.isNotEmpty()) items.add(browsable("smart:${g.id}", g.name))
         }
+        if (snap.playlists.isNotEmpty()) items.add(browsable(PLAYLISTS_ID, "Playlists"))
+        items.add(browsable(SONGS_ID, "All Songs"))
+      }
+      parentId == PLAYLISTS_ID -> {
+        for (p in snap.playlists) items.add(browsable("playlist:${p.id}", p.name))
+      }
+      parentId == SONGS_ID -> {
+        for (t in snap.songs) items.add(playable(SONGS_ID, t))
+      }
+      else -> {
+        for (t in resolveList(parentId, snap)) items.add(playable(parentId, t))
       }
     }
     result.sendResult(items)
   }
 
-  private fun loadLibrary(): List<CarTrack> {
+  private fun browsable(mediaId: String, title: String): MediaBrowserCompat.MediaItem {
+    val desc = MediaDescriptionCompat.Builder().setMediaId(mediaId).setTitle(title).build()
+    return MediaBrowserCompat.MediaItem(desc, MediaBrowserCompat.MediaItem.FLAG_BROWSABLE)
+  }
+
+  private fun playable(listId: String, t: CarTrack): MediaBrowserCompat.MediaItem {
+    // Hierarchy-aware media id so playback knows which list to queue.
+    val desc = MediaDescriptionCompat.Builder()
+      .setMediaId("$listId|${t.id}")
+      .setTitle(t.title)
+      .setSubtitle(t.artist)
+      .build()
+    return MediaBrowserCompat.MediaItem(desc, MediaBrowserCompat.MediaItem.FLAG_PLAYABLE)
+  }
+
+  /** Resolves a list id ("songs" / "smart:x" / "playlist:x") to its tracks. */
+  private fun resolveList(listId: String, snap: CarSnapshot): List<CarTrack> {
+    return when {
+      listId == SONGS_ID -> snap.songs
+      listId.startsWith("smart:") ->
+        snap.smart.firstOrNull { it.id == listId.removePrefix("smart:") }
+          ?.trackIds?.mapNotNull { snap.byId[it] } ?: emptyList()
+      listId.startsWith("playlist:") ->
+        snap.playlists.firstOrNull { it.id == listId.removePrefix("playlist:") }
+          ?.trackIds?.mapNotNull { snap.byId[it] } ?: emptyList()
+      else -> snap.songs
+    }
+  }
+
+  private fun loadSnapshot(): CarSnapshot {
     return try {
       val f = File(filesDir, LIB_FILE)
-      if (!f.exists()) return emptyList()
-      val arr = JSONArray(f.readText())
-      (0 until arr.length()).mapNotNull { i ->
-        val o = arr.optJSONObject(i) ?: return@mapNotNull null
-        val uri = o.optString("uri")
-        if (uri.isNullOrEmpty()) return@mapNotNull null
+      if (!f.exists()) return emptySnapshot()
+      val text = f.readText().trim()
+      val songs = ArrayList<CarTrack>()
+      val playlists = ArrayList<CarGroup>()
+      val smart = ArrayList<CarGroup>()
+
+      if (text.startsWith("[")) {
+        parseTracks(JSONArray(text), songs)
+      } else {
+        val obj = JSONObject(text)
+        parseTracks(obj.optJSONArray("songs") ?: JSONArray(), songs)
+        parseGroups(obj.optJSONArray("playlists"), playlists)
+        parseGroups(obj.optJSONArray("smart"), smart)
+      }
+      val byId = HashMap<String, CarTrack>()
+      for (t in songs) byId[t.id] = t
+      CarSnapshot(songs, byId, playlists, smart)
+    } catch (e: Throwable) {
+      emptySnapshot()
+    }
+  }
+
+  private fun parseTracks(arr: JSONArray, out: ArrayList<CarTrack>) {
+    for (i in 0 until arr.length()) {
+      val o = arr.optJSONObject(i) ?: continue
+      val uri = o.optString("uri")
+      if (uri.isNullOrEmpty()) continue
+      out.add(
         CarTrack(
           id = o.optString("id", uri),
           title = o.optString("title", "Unknown"),
           artist = o.optString("artist", ""),
           album = o.optString("album", ""),
           uri = uri,
-        )
-      }
-    } catch (e: Throwable) {
-      emptyList()
+        ),
+      )
     }
   }
+
+  private fun parseGroups(arr: JSONArray?, out: ArrayList<CarGroup>) {
+    if (arr == null) return
+    for (i in 0 until arr.length()) {
+      val o = arr.optJSONObject(i) ?: continue
+      val ids = ArrayList<String>()
+      val idsArr = o.optJSONArray("trackIds") ?: JSONArray()
+      for (j in 0 until idsArr.length()) ids.add(idsArr.optString(j))
+      out.add(CarGroup(o.optString("id"), o.optString("name", "Playlist"), ids))
+    }
+  }
+
+  private fun emptySnapshot() = CarSnapshot(emptyList(), emptyMap(), emptyList(), emptyList())
 
   /* ----------------------------- Session callback ----------------------------- */
 
   private inner class SessionCallback : MediaSessionCompat.Callback() {
     override fun onPlay() {
-      if (player == null && queue.isNotEmpty()) playAt(if (index >= 0) index else 0)
-      else resume()
+      if (player == null && queue.isNotEmpty()) playAt(if (index >= 0) index else 0) else resume()
     }
 
     override fun onPause() = pause()
@@ -180,22 +270,40 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
     }
 
     override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
-      queue = loadLibrary()
+      val snap = loadSnapshot()
+      val parts = (mediaId ?: "").split("|", limit = 2)
+      if (parts.size == 2) {
+        queue = resolveList(parts[0], snap)
+        val i = queue.indexOfFirst { it.id == parts[1] }
+        if (i >= 0) { playAt(i); return }
+      }
+      // Fallback: treat the whole id as a track id within all songs.
+      queue = snap.songs
       val i = queue.indexOfFirst { it.id == mediaId }
       if (i >= 0) playAt(i) else if (queue.isNotEmpty()) playAt(0)
     }
 
     override fun onPlayFromSearch(query: String?, extras: Bundle?) {
-      queue = loadLibrary()
+      val snap = loadSnapshot()
+      queue = snap.songs
       if (queue.isEmpty()) return
       val match = findMatch(query)
-      // If a specific song was asked for and found, play it; otherwise fall back
-      // to another song so playback always starts.
       playAt(if (match >= 0) match else 0)
     }
   }
 
-  /** Best-effort fuzzy match of a spoken query against title/artist/album. */
+  /** Public entry point so the app (via the module) can drive car playback. */
+  fun handleCommand(command: String) {
+    when (command) {
+      "play" -> if (player == null && queue.isNotEmpty()) playAt(if (index >= 0) index else 0) else resume()
+      "pause" -> pause()
+      "playpause" -> if (player?.isPlaying == true) pause() else handleCommand("play")
+      "next" -> if (queue.isNotEmpty()) playAt((index + 1) % queue.size)
+      "previous" -> if (queue.isNotEmpty()) playAt(if (index <= 0) queue.size - 1 else index - 1)
+      "stop" -> stopPlayback()
+    }
+  }
+
   private fun findMatch(query: String?): Int {
     val q = query?.trim()?.lowercase() ?: return -1
     if (q.isEmpty()) return -1
@@ -237,6 +345,7 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
             updateMetadata(t, duration.toLong())
             updateState(PlaybackStateCompat.STATE_PLAYING)
             startForeground(NOTIFICATION_ID, buildNotification(t, true))
+            emitState(true)
           }
         }
         setOnCompletionListener { onTrackComplete() }
@@ -244,7 +353,6 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
         prepareAsync()
       }
     } catch (e: Throwable) {
-      // Skip unreadable files.
       if (queue.size > 1) playAt((i + 1) % queue.size)
     }
   }
@@ -259,6 +367,7 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
         player?.start()
         updateState(PlaybackStateCompat.STATE_PLAYING)
         queue.getOrNull(index)?.let { startForeground(NOTIFICATION_ID, buildNotification(it, true)) }
+        emitState(true)
       }
     } catch (e: Throwable) {
     }
@@ -269,11 +378,11 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
       player?.pause()
       updateState(PlaybackStateCompat.STATE_PAUSED)
       queue.getOrNull(index)?.let {
-        val n = buildNotification(it, false)
-        getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, n)
+        getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, buildNotification(it, false))
       }
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_DETACH)
       else @Suppress("DEPRECATION") stopForeground(false)
+      emitState(false)
     } catch (e: Throwable) {
     }
   }
@@ -285,11 +394,36 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
       player = null
       updateState(PlaybackStateCompat.STATE_STOPPED)
       session.isActive = false
+      CarPlaybackBus.emit(mapOf("active" to false))
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
       else @Suppress("DEPRECATION") stopForeground(true)
       stopSelf()
     } catch (e: Throwable) {
     }
+  }
+
+  private fun emitState(playing: Boolean) {
+    val t = queue.getOrNull(index)
+    if (t == null) {
+      CarPlaybackBus.emit(mapOf("active" to false))
+      return
+    }
+    val dur = try {
+      player?.duration ?: 0
+    } catch (e: Throwable) {
+      0
+    }
+    CarPlaybackBus.emit(
+      mapOf(
+        "active" to true,
+        "id" to t.id,
+        "title" to t.title,
+        "artist" to t.artist,
+        "album" to t.album,
+        "durationMs" to dur,
+        "playing" to playing,
+      ),
+    )
   }
 
   private fun updateState(state: Int) {
@@ -327,8 +461,7 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
         )
         .setOnAudioFocusChangeListener { change ->
           when (change) {
-            AudioManager.AUDIOFOCUS_LOSS -> pause()
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> pause()
+            AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> pause()
           }
         }
         .build()
@@ -400,9 +533,7 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
         ),
       )
       .setStyle(
-        MediaStyle()
-          .setMediaSession(session.sessionToken)
-          .setShowActionsInCompactView(0, 1, 2),
+        MediaStyle().setMediaSession(session.sessionToken).setShowActionsInCompactView(0, 1, 2),
       )
       .build()
   }
@@ -417,6 +548,7 @@ class PrimeBeatsMediaService : MediaBrowserServiceCompat() {
     player?.release()
     player = null
     session.release()
+    if (instance === this) instance = null
     super.onDestroy()
   }
 

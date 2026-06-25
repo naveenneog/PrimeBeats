@@ -12,11 +12,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { ArtworkSheet } from './src/components/ArtworkSheet';
-import { CarMedia } from './src/native/carMedia';
+import { CarBanner } from './src/components/CarBanner';
 import { ShareIn } from './src/native/shareIn';
 import { prefetchEmbeddedArt } from './src/media/embeddedArt';
+import { pushCarSnapshot } from './src/media/carSnapshot';
 import { processSharedUris } from './src/media/shareImport';
 import { useArtworkStore } from './src/store/artworkStore';
+import { useCarStore } from './src/store/carStore';
 import { useEqStore } from './src/store/eqStore';
 import { useImportedStore } from './src/store/importedStore';
 import { useLibraryStore } from './src/store/libraryStore';
@@ -74,11 +76,22 @@ export default function App() {
     }
   }, [libraryStatus]);
 
-  // Keep the Android Auto media browser's library snapshot in sync.
+  // Keep the Android Auto browse tree in sync with the library, and mirror what's
+  // playing in the car back into the app.
   const visibleTracks = useLibraryStore((s) => s.tracks);
   useEffect(() => {
-    if (visibleTracks.length) CarMedia.setLibrary(visibleTracks);
+    if (visibleTracks.length) pushCarSnapshot();
   }, [visibleTracks]);
+
+  useEffect(() => {
+    useCarStore.getState().init();
+    const unsubPlaylists = usePlaylistStore.subscribe(() => pushCarSnapshot());
+    const unsubTaste = useTasteStore.subscribe(() => pushCarSnapshot());
+    return () => {
+      unsubPlaylists();
+      unsubTaste();
+    };
+  }, []);
 
   // P2P sharing: hydrate received tracks, then import any incoming shared audio
   // (both the launch intent and shares that arrive while the app is running).
@@ -122,6 +135,7 @@ export default function App() {
           </NavigationContainer>
         )}
         <ArtworkSheet />
+        <CarBanner />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
