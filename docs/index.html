@@ -299,6 +299,26 @@
         transform: rotate(0) translateY(-6px);
       }
 
+      /* car display */
+      .car-frame {
+        max-width: 820px;
+        margin: 0 auto;
+        border-radius: 22px;
+        padding: 14px;
+        background: linear-gradient(160deg, #20202b, #0d0d12);
+        border: 1px solid var(--border);
+        box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.85);
+        transition: transform 0.3s ease;
+      }
+      .car-frame:hover {
+        transform: translateY(-5px);
+      }
+      .car-frame img {
+        width: 100%;
+        display: block;
+        border-radius: 12px;
+      }
+
       /* sections */
       section {
         padding: 72px 0;
@@ -502,7 +522,7 @@
     <header class="hero">
       <div class="wrap hero-grid">
         <div>
-          <span class="badge"><span class="dot"></span> v1.7.0 · Android · 100% offline</span>
+          <span class="badge"><span class="dot"></span> v1.9.0 · Android · 100% offline</span>
           <h1>Your music,<br /><span class="grad-text">beautifully local.</span></h1>
           <p class="lead">
             An Amazon-Prime-Music-style player for the songs already on your phone — with on-device
@@ -562,6 +582,27 @@
             <div class="cap">Playlists</div>
             <div class="sub">Smart + your own, reorderable</div>
           </div>
+          <div class="shot">
+            <div class="phone"><img src="screenshots/share.svg" alt="Share music to another PrimeBeats user" /></div>
+            <div class="cap">Share music</div>
+            <div class="sub">Send songs to another user</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="car">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="eyebrow">On the road</div>
+          <h2>🚗 PrimeBeats in your car</h2>
+          <p>
+            Browse your library on the car screen and just ask — “play &lt;song&gt; from PrimeBeats.”
+            It finds the track in your local music and plays it.
+          </p>
+        </div>
+        <div class="car-frame">
+          <img src="screenshots/android-auto.svg" alt="PrimeBeats running in Android Auto" />
         </div>
       </div>
     </section>
@@ -655,8 +696,9 @@
           <div class="step"><b>3.</b> Launch PrimeBeats and grant the <b>audio/media</b> permission so it can scan your music.</div>
         </div>
         <p class="note-line">
-          Built with Expo · React Native · TypeScript · react-native-track-player · a native Kotlin
-          audio-effects module. Updates keep your playlists, taste, custom art and EQ settings.
+          Built with Expo · React Native · TypeScript · react-native-track-player · native Kotlin
+          modules for the equalizer, Android Auto and P2P sharing. Updates keep your playlists,
+          taste, custom art, EQ and received songs.
         </p>
       </div>
     </section>

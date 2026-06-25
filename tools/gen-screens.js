@@ -336,12 +336,132 @@ function playlists() {
   return frame(s);
 }
 
+function share() {
+  let s = topbar(
+    'Share music',
+    txt(W - 18, 64, 'Clear', { size: 13.5, color: C.primary, weight: 700, anchor: 'end' }),
+  );
+  s += txt(20, 96, 'Select songs to send to another PrimeBeats', { size: 12, color: C.textMuted });
+  s += txt(20, 112, 'user — via your phone’s share sheet.', { size: 12, color: C.textMuted });
+
+  const songs = [
+    [0, 'Midnight City', 'M83', true],
+    [3, 'Redbone', 'Childish Gambino', true],
+    [2, 'Instant Crush', 'Daft Punk', false],
+    [9, 'The Less I Know', 'Tame Impala', true],
+    [4, 'Nightcall', 'Kavinsky', false],
+    [7, 'Dreams', 'Fleetwood Mac', false],
+  ];
+  let y = 138;
+  songs.forEach((t) => {
+    s += tile(16, y, 44, t[0], 8);
+    s += txt(72, y + 18, t[1], { size: 14, weight: 600 });
+    s += txt(72, y + 35, t[2], { size: 12, color: C.textMuted });
+    const cbx = W - 32;
+    if (t[3]) {
+      s += `<circle cx="${cbx}" cy="${y + 22}" r="11" fill="${C.primary}"/>`;
+      s += `<path d="M${cbx - 5} ${y + 22}l3 3 6-6" stroke="${C.black}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+    } else {
+      s += `<circle cx="${cbx}" cy="${y + 22}" r="10.5" fill="none" stroke="${C.textFaint}" stroke-width="1.6"/>`;
+    }
+    y += 56;
+  });
+
+  // Footer send button.
+  const fy = H - 78;
+  s += `<rect x="0" y="${fy - 14}" width="${W}" height="${H - (fy - 14)}" fill="${C.bg}"/>`;
+  s += `<rect x="0" y="${fy - 14}" width="${W}" height="1" fill="${C.border}"/>`;
+  s += `<rect x="16" y="${fy}" width="${W - 32}" height="48" rx="24" fill="${C.primary}"/>`;
+  s += `<g transform="translate(118 ${fy + 16})" fill="none" stroke="${C.black}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="3" cy="8" r="2.4"/><circle cx="13" cy="3" r="2.4"/><circle cx="13" cy="13" r="2.4"/><path d="M5.1 6.9l5.8-2.8M5.1 9.1l5.8 2.8"/></g>`;
+  s += txt(W / 2 + 10, fy + 30, 'Send 3 songs', { size: 16, weight: 800, color: C.black, anchor: 'middle' });
+  return frame(s);
+}
+
+function androidAuto() {
+  const AW = 760;
+  const AH = 440;
+  const rail = 72;
+  const cx0 = rail + 30;
+  let g = `<rect x="0" y="0" width="${AW}" height="${AH}" fill="#0A0A0E"/>`;
+
+  // Left Android-Auto app rail.
+  g += `<rect x="0" y="0" width="${rail}" height="${AH}" fill="${C.surface}"/>`;
+  g += `<circle cx="${rail / 2}" cy="58" r="20" fill="url(#g0)"/>` + note(rail / 2, 56, 20 / 22);
+  g += `<g fill="none" stroke="${C.textFaint}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">`;
+  g += `<g transform="translate(${rail / 2 - 11} 116)"><path d="M11 1l9 20-9-5-9 5z"/></g>`; // nav
+  g += `<g transform="translate(${rail / 2 - 11} 176)"><path d="M3 5a2 2 0 012-2h12a2 2 0 012 2v9a2 2 0 01-2 2H9l-4 4v-4H5a2 2 0 01-2-2z"/></g>`; // messages
+  g += `<g transform="translate(${rail / 2 - 10} ${AH - 52})"><path d="M9 2L3 9l6 7"/></g>`; // back
+  g += `</g>`;
+
+  // Header.
+  g += txt(cx0, 52, 'PrimeBeats', { size: 22, weight: 800 });
+  g += txt(cx0, 74, 'Songs', { size: 13, color: C.textMuted, weight: 600 });
+
+  // Two-column browse grid.
+  const songs = [
+    [0, 'Midnight City', 'M83'],
+    [3, 'Redbone', 'Childish Gambino'],
+    [9, 'The Less I Know', 'Tame Impala'],
+    [4, 'Nightcall', 'Kavinsky'],
+    [2, 'Instant Crush', 'Daft Punk'],
+    [7, 'Dreams', 'Fleetwood Mac'],
+  ];
+  const colW = (AW - rail - 60) / 2;
+  songs.forEach((t, i) => {
+    const col = i % 2;
+    const rowI = Math.floor(i / 2);
+    const x = cx0 + col * (colW + 12);
+    const y = 96 + rowI * 62;
+    g += `<rect x="${x}" y="${y}" width="${colW}" height="52" rx="12" fill="${C.surface}"/>`;
+    g += tile(x + 8, y + 8, 36, t[0], 8);
+    g += txt(x + 54, y + 24, t[1], { size: 13.5, weight: 600 });
+    g += txt(x + 54, y + 40, t[2], { size: 11.5, color: C.textMuted });
+  });
+
+  // Now-playing bar.
+  const npY = AH - 90;
+  g += `<rect x="${rail}" y="${npY}" width="${AW - rail}" height="90" fill="${C.surfaceAlt}"/>`;
+  g += tile(cx0, npY + 17, 56, 0, 10);
+  g += txt(cx0 + 72, npY + 38, 'Midnight City', { size: 16, weight: 700 });
+  g += txt(cx0 + 72, npY + 60, 'M83', { size: 13, color: C.textMuted });
+  const tcx = AW - 150;
+  g += `<g fill="${C.text}" transform="translate(${tcx} ${npY + 36})"><path d="M2 0v18M4 9l13 9V0z"/></g>`;
+  g += `<circle cx="${tcx + 70}" cy="${npY + 45}" r="26" fill="${C.primary}"/>`;
+  g += `<path d="M${tcx + 62} ${npY + 33}l18 12-18 12z" fill="${C.black}"/>`;
+  g += `<g fill="${C.text}" transform="translate(${tcx + 120} ${npY + 36})"><path d="M16 0v18M14 9L1 0v18z"/></g>`;
+
+  // Voice chip ("play X from PrimeBeats").
+  const chipW = 320;
+  const chipX = rail + (AW - rail) / 2 - chipW / 2;
+  const chipY = npY - 56;
+  g += `<rect x="${chipX}" y="${chipY}" width="${chipW}" height="42" rx="21" fill="${C.accent}"/>`;
+  g += `<g transform="translate(${chipX + 18} ${chipY + 11})" fill="#fff"><rect x="3" y="0" width="8" height="13" rx="4"/><path d="M0 9a7 7 0 0014 0M7 16v4M3 22h8" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></g>`;
+  g += txt(chipX + chipW / 2 + 12, chipY + 26, 'Play Midnight City from PrimeBeats', {
+    size: 13,
+    weight: 700,
+    color: '#fff',
+    anchor: 'middle',
+  });
+
+  // Top status strip.
+  g += txt(cx0, 24, '12:30', { size: 12, color: C.textMuted, weight: 600 });
+
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${AW}" height="${AH}" viewBox="0 0 ${AW} ${AH}" role="img">` +
+    `<defs>${gradDefs()}<clipPath id="car"><rect x="0" y="0" width="${AW}" height="${AH}" rx="18"/></clipPath></defs>` +
+    `<g clip-path="url(#car)">${g}</g>` +
+    `<rect x="0.7" y="0.7" width="${AW - 1.4}" height="${AH - 1.4}" rx="18" fill="none" stroke="${C.border}" stroke-width="1.4"/></svg>`
+  );
+}
+
 const screens = {
   'now-playing': nowPlaying(),
   library: library(),
   equalizer: equalizer(),
   'smart-radio': smartRadio(),
   playlists: playlists(),
+  share: share(),
+  'android-auto': androidAuto(),
 };
 
 const outDir = path.join(__dirname, '..', 'docs', 'screenshots');
