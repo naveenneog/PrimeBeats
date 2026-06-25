@@ -318,6 +318,63 @@
         display: block;
         border-radius: 12px;
       }
+      .setup {
+        max-width: 720px;
+        margin: 40px auto 0;
+        background: linear-gradient(180deg, var(--surface), #101016);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 30px 28px;
+      }
+      .setup-title {
+        font-size: 20px;
+        font-weight: 800;
+        font-family: 'Outfit', sans-serif;
+        margin-bottom: 10px;
+      }
+      .setup-lead {
+        color: var(--muted);
+        margin: 0 0 22px;
+        font-size: 14.5px;
+      }
+      .setup-steps {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 14px;
+      }
+      .setup-steps li {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        color: var(--text);
+        font-size: 15px;
+      }
+      .setup-steps .num {
+        flex: 0 0 28px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, var(--accent), var(--primary));
+        color: #04130d;
+        font-weight: 800;
+        font-size: 14px;
+      }
+      .setup-steps b {
+        color: #fff;
+      }
+      .setup-note {
+        margin: 22px 0 0;
+        padding: 14px 16px;
+        background: rgba(31, 209, 160, 0.08);
+        border: 1px solid rgba(31, 209, 160, 0.25);
+        border-radius: 12px;
+        color: var(--muted);
+        font-size: 14px;
+      }
 
       /* sections */
       section {
@@ -603,6 +660,41 @@
         </div>
         <div class="car-frame">
           <img src="screenshots/android-auto.svg" alt="PrimeBeats running in Android Auto" />
+        </div>
+
+        <div class="setup">
+          <h3 class="setup-title">Make it show up in your car</h3>
+          <p class="setup-lead">
+            PrimeBeats is sideloaded (not on the Play Store), so Android Auto hides it until you
+            allow unknown apps — a quick one-time toggle on your phone. It's an Android Auto
+            security setting, not an app permission.
+          </p>
+          <ol class="setup-steps">
+            <li>
+              <span class="num">1</span>
+              <span>Open the <b>Android Auto</b> settings on your phone (Settings → Apps → Android Auto, or search “Android Auto”).</span>
+            </li>
+            <li>
+              <span class="num">2</span>
+              <span>Tap <b>Version</b> at the bottom about <b>10 times</b> to unlock <b>Developer mode</b>.</span>
+            </li>
+            <li>
+              <span class="num">3</span>
+              <span>Open the <b>⋮ menu → Developer settings</b>.</span>
+            </li>
+            <li>
+              <span class="num">4</span>
+              <span>Turn <b>“Unknown sources”</b> on.</span>
+            </li>
+            <li>
+              <span class="num">5</span>
+              <span><b>Force-stop</b> Android Auto, then <b>reconnect</b> your phone to the car — PrimeBeats now appears in the media apps.</span>
+            </li>
+          </ol>
+          <p class="setup-note">
+            💡 Open PrimeBeats once after installing so it can share your library, then say
+            <b>“Play &lt;song&gt; from PrimeBeats.”</b>
+          </p>
         </div>
       </div>
     </section>
