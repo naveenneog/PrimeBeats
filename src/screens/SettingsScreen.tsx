@@ -12,7 +12,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useTasteStore } from '../store/tasteStore';
 import { colors, radius, spacing } from '../theme';
 
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 
 function Row({
   icon,
@@ -107,6 +107,15 @@ export function SettingsScreen() {
           title="Equalizer"
           subtitle="Tune bands, pick a preset, or boost the bass"
           onPress={() => navigation.navigate('Equalizer')}
+        />
+
+        <Text style={styles.section}>Sharing</Text>
+        <Row
+          icon="share-social"
+          iconColor={colors.accent}
+          title="Share music"
+          subtitle="Send songs to another PrimeBeats user"
+          onPress={() => navigation.navigate('ShareMusic')}
         />
 
         <Text style={styles.section}>Recommendations</Text>

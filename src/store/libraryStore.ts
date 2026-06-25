@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { ensureAudioPermission, groupAlbums, scanTracks } from '../media/scanner';
 import type { Album, Track } from '../types';
+import { useImportedStore } from './importedStore';
 import { applyMetadataOverride, useMetadataStore } from './metadataStore';
 import { useSettingsStore } from './settingsStore';
 
@@ -52,7 +53,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
   recomputeAll: () => {
     const overrides = useMetadataStore.getState().overrides;
-    const allTracks = get().rawTracks.map((t) => applyMetadataOverride(t, overrides[t.id]));
+    const imported = useImportedStore.getState().tracks;
+    // Received (shared) tracks live alongside the device scan in the library.
+    const base = [...get().rawTracks, ...imported];
+    const allTracks = base.map((t) => applyMetadataOverride(t, overrides[t.id]));
     set({ allTracks });
     get().recomputeVisible();
   },
@@ -81,3 +85,6 @@ useSettingsStore.subscribe(() => useLibraryStore.getState().recomputeVisible());
 
 // Re-apply title/artist overrides whenever the user edits track metadata.
 useMetadataStore.subscribe(() => useLibraryStore.getState().recomputeAll());
+
+// Merge in received (shared) tracks whenever they change.
+useImportedStore.subscribe(() => useLibraryStore.getState().recomputeAll());

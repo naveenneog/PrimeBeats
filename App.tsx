@@ -5,6 +5,7 @@ import {
 } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { Alert } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -12,9 +13,12 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { ArtworkSheet } from './src/components/ArtworkSheet';
 import { CarMedia } from './src/native/carMedia';
+import { ShareIn } from './src/native/shareIn';
 import { prefetchEmbeddedArt } from './src/media/embeddedArt';
+import { processSharedUris } from './src/media/shareImport';
 import { useArtworkStore } from './src/store/artworkStore';
 import { useEqStore } from './src/store/eqStore';
+import { useImportedStore } from './src/store/importedStore';
 import { useLibraryStore } from './src/store/libraryStore';
 import { useMetadataStore } from './src/store/metadataStore';
 import { initPlayer, usePlayerStore } from './src/store/playerStore';
@@ -75,6 +79,36 @@ export default function App() {
   useEffect(() => {
     if (visibleTracks.length) CarMedia.setLibrary(visibleTracks);
   }, [visibleTracks]);
+
+  // P2P sharing: hydrate received tracks, then import any incoming shared audio
+  // (both the launch intent and shares that arrive while the app is running).
+  useEffect(() => {
+    let unsubscribe: () => void = () => undefined;
+    let cancelled = false;
+
+    const receive = async (uris: string[]) => {
+      const tracks = await processSharedUris(uris);
+      if (cancelled || tracks.length === 0) return;
+      useImportedStore.getState().add(tracks);
+      Alert.alert(
+        'Songs received',
+        `Added ${tracks.length} song${tracks.length === 1 ? '' : 's'} to your library.`,
+      );
+    };
+
+    (async () => {
+      await useImportedStore.getState().hydrate();
+      if (cancelled) return;
+      const initial = ShareIn.getInitialShare();
+      if (initial.length) void receive(initial);
+      unsubscribe = ShareIn.onShareReceived((uris) => void receive(uris));
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["ShareInModule"]
+  },
+  "android": {
+    "modules": ["com.primebeats.sharein.ShareInModule"]
+  }
+}

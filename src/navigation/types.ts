@@ -23,4 +23,5 @@ export type RootStackParamList = {
   ManageHidden: undefined;
   Queue: undefined;
   Equalizer: undefined;
+  ShareMusic: undefined;
 };

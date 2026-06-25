@@ -2,7 +2,7 @@
   "expo": {
     "name": "PrimeBeats",
     "slug": "PrimeBeats",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,19 @@
     },
     "android": {
       "package": "com.primebeats.app",
-      "versionCode": 9,
+      "versionCode": 10,
+      "intentFilters": [
+        {
+          "action": "SEND",
+          "category": ["DEFAULT"],
+          "data": [{ "mimeType": "audio/*" }]
+        },
+        {
+          "action": "SEND_MULTIPLE",
+          "category": ["DEFAULT"],
+          "data": [{ "mimeType": "audio/*" }]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

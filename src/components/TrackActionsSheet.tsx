@@ -8,6 +8,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { usePlayerStore } from '../store/playerStore';
 import { useArtworkSheetStore } from '../store/artworkSheetStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { ShareIn } from '../native/shareIn';
 import { colors, radius, spacing } from '../theme';
 import type { Track } from '../types';
 import { ArtTile } from './ArtTile';
@@ -87,6 +88,14 @@ export function TrackActionsSheet({ track, onClose }: { track: Track | null; onC
             onPress={() => {
               onClose();
               openArtwork(track);
+            }}
+          />
+          <Action
+            icon="share-social-outline"
+            label="Share song"
+            onPress={() => {
+              onClose();
+              void ShareIn.shareTracks([track]);
             }}
           />
           <Action

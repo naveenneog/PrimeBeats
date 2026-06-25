@@ -34,6 +34,7 @@ index.ts ──registers──> RNTP playback service (lock-screen remote contro
 | `settingsStore` | Hidden/excluded track ids | AsyncStorage |
 | `metadataStore` | Per-track title/artist overrides (user-edited names) | AsyncStorage |
 | `artworkStore` | Per-track custom/web/uploaded cover art | AsyncStorage + files |
+| `importedStore` | Tracks received from other PrimeBeats users (P2P) | AsyncStorage + files |
 | `eqStore` | Equalizer + bass-boost settings | AsyncStorage |
 | `playerStore` | Playback queue + controls, driven by RNTP | runtime only |
 
@@ -166,7 +167,32 @@ Expo module `modules/carmedia` containing a legacy `MediaBrowserServiceCompat`
 
 ---
 
-## 7. Debugging playbook
+## 7. Peer-to-peer sharing (`sharein` module)
+
+Selecting songs and sending them to another PrimeBeats user, via the OS — no
+in-app server, works over Nearby Share / Bluetooth / etc.
+
+- **Send** (`ShareMusicScreen`, Settings → Sharing; or a track's ⋯ → Share):
+  `ShareIn.shareTracks(tracks)` → native `ACTION_SEND_MULTIPLE` with FileProvider
+  `content://` URIs for each file → the OS Sharesheet.
+- **Receive:** app.json `android.intentFilters` make MainActivity accept
+  `SEND`/`SEND_MULTIPLE` `audio/*`. `ShareIn.getInitialShare()` reads the launch
+  intent once; `OnNewIntent` → `onShareReceived` event handles shares while
+  running. `processSharedUris` calls `ShareIn.importToCache` (copies the
+  `content://` stream into the cache), moves it into `documentDirectory/imported/`,
+  derives title/artist from the filename, and `importedStore.add` persists it.
+- **Library merge:** `libraryStore.recomputeAll` concatenates `rawTracks` (scan)
+  with `importedStore.tracks`, so received songs are first-class (searchable,
+  playlistable, art/rename/EQ all apply). They survive updates (document dir).
+- **Why not MediaStore?** Writing received audio to the shared MediaStore needs
+  extra permissions/SAF and is flaky across OEMs; keeping imports app-private is
+  reliable and fully under our control.
+- **Testing:** needs two devices (or share an audio file to PrimeBeats from any
+  app). Can't be exercised in CI.
+
+---
+
+## 8. Debugging playbook
 
 | Symptom | Where to look |
 | --- | --- |
@@ -190,6 +216,8 @@ Expo module `modules/carmedia` containing a legacy `MediaBrowserServiceCompat`
 | App doesn't appear in Android Auto | Auto only lists Play-Store apps by default — enable **Developer settings → "Unknown sources"** in the Android Auto app. Then check the merged manifest has `PrimeBeatsMediaService` + the `com.google.android.gms.car.application` meta-data (`modules/carmedia`). |
 | Voice "play X from PrimeBeats" plays the wrong/over a song | `carmedia` reads the JSON library snapshot from `filesDir/primebeats_carlib.json` (written by `CarMedia.setLibrary` on every library change). If empty, the app hasn't run since install — open it once. Matching is `matchTrackIndex` (tested); no match → falls back to another song by design. |
 | Auto playback and phone playback fight | They're separate sessions (carmedia uses its own `MediaPlayer`; in-app uses RNTP). Android **audio focus** arbitrates — RNTP has `autoHandleInterruptions:true` so it pauses when the car service takes focus. |
+| Sharing a song does nothing | `sharein` shares via a FileProvider (`${applicationId}.sharein.fileprovider`, paths in `res/xml/sharein_file_paths.xml`). Needs the launching **activity** — `ShareIn.shareTracks` rejects from a non-activity context. Scanned tracks are external `file://`, imported ones live under `documentDirectory` (both covered by the file_paths). |
+| Received songs don't appear | Receiving relies on the `SEND`/`SEND_MULTIPLE` `audio/*` intent-filters (app.json `android.intentFilters`) on MainActivity. `ShareIn.getInitialShare()` reads the launch intent once; `onShareReceived` (via `OnNewIntent`) handles shares while running. `processSharedUris` copies them into `documentDirectory/imported/` and `importedStore.add` merges them into the library (no MediaStore write needed). |
 
 ### Tools
 - **Type-check:** `npx tsc --noEmit`
@@ -201,11 +229,12 @@ Expo module `modules/carmedia` containing a legacy `MediaBrowserServiceCompat`
 - **Logs:** Metro console for JS; `adb logcat | findstr -i "TrackPlayer ReactNative"` for native/playback logs on a connected device.
 - **Inspect persisted state:** the AsyncStorage keys are
   `@primebeats/playlists/v1`, `@primebeats/taste/v1`, `@primebeats/settings/v1`,
-  `@primebeats/equalizer/v1`, `@primebeats/metadata/v1`, `@primebeats/artwork/v1`.
+  `@primebeats/equalizer/v1`, `@primebeats/metadata/v1`, `@primebeats/artwork/v1`,
+  `@primebeats/imported/v1`.
 
 ---
 
-## 8. Build & release (local, no EAS)
+## 9. Build & release (local, no EAS)
 
 The standalone APK is built on a machine with JDK 17 + Android SDK (see README).
 
@@ -228,15 +257,15 @@ Notes:
 
 ---
 
-## 9. Directory map
+## 10. Directory map
 
 ```
 src/
   ml/            features.ts, recommender.ts            (recommendation engine)
-  store/         library/playlist/taste/settings/metadata/artwork/eq/player (zustand)
+  store/         library/playlist/taste/settings/metadata/artwork/eq/imported/player
   player/        playbackService.ts                     (RNTP lock-screen service)
-  media/         scanner.ts, embeddedArt.ts, webArt.ts  (scan + artwork sources)
-  native/        equalizer.ts, carMedia.ts              (crash-proof native bridges)
+  media/         scanner.ts, embeddedArt.ts, webArt.ts, shareImport.ts
+  native/        equalizer.ts, carMedia.ts, shareIn.ts  (crash-proof native bridges)
   hooks/         useKeyboardHeight.ts                   (lift sheets over keyboard)
   navigation/    RootNavigator, Tabs, types
   components/    ArtTile, TrackRow, TrackList, MiniPlayer, TrackActionsSheet,
@@ -244,12 +273,13 @@ src/
                  SeekBar, TopBar, Header, States, TextPromptModal
   screens/       Home, Songs, Albums, AlbumDetail, Playlists, PlaylistDetail,
                  SmartPlaylist, Search, NowPlaying, AddToPlaylist, Onboarding,
-                 Settings, ManageHidden, Queue, Equalizer
+                 Settings, ManageHidden, Queue, Equalizer, ShareMusic
   utils/         format.ts, seek.ts, search.ts
   **/__tests__/  jest-expo unit tests (run with `npm test`)
   theme.ts, types.ts
 modules/
   equalizer/     Expo local native module (Kotlin EQ + BassBoost)
   carmedia/      Expo local native module (Android Auto MediaBrowserService)
+  sharein/       Expo local native module (P2P share send + receive)
 App.tsx, index.ts
 ```

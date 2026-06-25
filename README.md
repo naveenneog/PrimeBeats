@@ -15,6 +15,7 @@ A polished, Amazon-Prime-Music-style **local music player for Android**, built w
 - **Local audio streaming** — scans your device with `expo-media-library` and plays files via `expo-audio` (ExoPlayer under the hood).
 - **Background playback** — keeps playing when the app is backgrounded or the screen is locked, with a media notification & lock-screen controls.
 - **Android Auto** — PrimeBeats shows up in the car: browse your songs and say **“play &lt;song&gt; from PrimeBeats”** — it finds the track in your local library (or plays another if it's not there). Backed by a native media-browser service.
+- **P2P music sharing** — select songs and **send them to another PrimeBeats user** through your phone's share sheet (Nearby Share, Bluetooth, …). Received songs import straight into the receiver's library (under *Shared with me*) and persist across updates.
 - **Queue + playback controls** — play/pause, next/previous, seek, **shuffle**, and **repeat** (off / all / one), with automatic advance at track end.
 - **Playlists** — create, rename, delete, add/remove tracks; persisted locally with `AsyncStorage`.
 - **Smart Radio (on-device ML)** — an endless auto-queue that picks similar songs based on the current track and your learned taste, with exploration + per-artist diversity. Fully offline.

@@ -8,6 +8,7 @@ import { NowPlayingScreen } from '../screens/NowPlayingScreen';
 import { PlaylistDetailScreen } from '../screens/PlaylistDetailScreen';
 import { QueueScreen } from '../screens/QueueScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { ShareMusicScreen } from '../screens/ShareMusicScreen';
 import { SmartPlaylistScreen } from '../screens/SmartPlaylistScreen';
 import { Tabs } from './Tabs';
 import type { RootStackParamList } from './types';
@@ -24,6 +25,7 @@ export function RootNavigator() {
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Equalizer" component={EqualizerScreen} />
       <Stack.Screen name="ManageHidden" component={ManageHiddenScreen} />
+      <Stack.Screen name="ShareMusic" component={ShareMusicScreen} />
       <Stack.Screen
         name="NowPlaying"
         component={NowPlayingScreen}
