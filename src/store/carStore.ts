@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { CarMedia, type CarPlaybackState } from '../native/carMedia';
+import { carSource } from './carSource';
 import { usePlayerStore } from './playerStore';
 
 export type CarNowPlaying = {
@@ -37,9 +38,11 @@ export const useCarStore = create<CarState>((set, get) => ({
 
     const apply = (s: CarPlaybackState | null) => {
       if (!s || !s.active) {
+        carSource.active = false;
         set({ active: false, playing: false });
         return;
       }
+      carSource.active = true;
       set({
         active: true,
         playing: !!s.playing,
@@ -54,7 +57,10 @@ export const useCarStore = create<CarState>((set, get) => ({
 
     // When the user starts playback on the phone, hand off (hide the car banner).
     usePlayerStore.subscribe((state) => {
-      if (state.isPlaying && get().active) set({ active: false });
+      if (state.isPlaying && get().active) {
+        carSource.active = false;
+        set({ active: false });
+      }
     });
   },
 
@@ -63,6 +69,7 @@ export const useCarStore = create<CarState>((set, get) => ({
   previous: () => CarMedia.sendCommand('previous'),
   stop: () => {
     CarMedia.sendCommand('stop');
+    carSource.active = false;
     set({ active: false, playing: false, track: null });
   },
 }));

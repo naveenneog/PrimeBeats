@@ -5,21 +5,19 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
 
 /**
- * Bridges the JS library to the Android Auto media service: JS pushes a JSON
- * snapshot of the playable library (songs + playlists + smart playlists), which
- * we persist so `PrimeBeatsMediaService` can browse/search/play them — even when
- * started cold by the car. It also relays car playback state to JS and forwards
- * transport commands so the phone UI can stay in sync with the car.
+ * Bridges JS and the Android Auto media service: pushes the browse snapshot,
+ * mirrors phone playback into the car session (`setNowPlaying`), relays car
+ * playback state + Auto commands to JS, and forwards transport commands.
  */
 class CarMediaModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("CarMedia")
 
-    Events("onCarPlayback")
+    Events("onCarPlayback", "onCarCommand")
 
     Function("isSupported") { true }
 
-    // json: { songs:[{id,title,artist,album,uri}], playlists:[{id,name,trackIds}], smart:[...] }
+    // json: { songs:[...], playlists:[{id,name,trackIds}], smart:[...] }
     Function("setLibrary") { json: String ->
       try {
         val ctx = appContext.reactContext ?: return@Function false
@@ -30,10 +28,16 @@ class CarMediaModule : Module() {
       }
     }
 
-    /** Latest car playback state, for seeding the UI when the app opens. */
+    /** Mirror what the phone (RNTP) is playing into the car session. */
+    Function("setNowPlaying") { state: Map<String, Any?> ->
+      PrimeBeatsMediaService.instance?.applyProxyState(state)
+      Unit
+    }
+
+    /** Latest local car playback state, for seeding the in-app banner. */
     Function("getNowPlaying") { CarPlaybackBus.latest }
 
-    /** Forwards a transport command to the running car service. */
+    /** Forward a transport command to the car's local playback (from the banner). */
     Function("sendCommand") { command: String ->
       PrimeBeatsMediaService.instance?.handleCommand(command)
       Unit
@@ -42,9 +46,15 @@ class CarMediaModule : Module() {
     OnStartObserving("onCarPlayback") {
       CarPlaybackBus.onState = { state -> sendEvent("onCarPlayback", state) }
     }
-
     OnStopObserving("onCarPlayback") {
       CarPlaybackBus.onState = null
+    }
+
+    OnStartObserving("onCarCommand") {
+      CarPlaybackBus.onCommand = { command -> sendEvent("onCarCommand", mapOf("command" to command)) }
+    }
+    OnStopObserving("onCarCommand") {
+      CarPlaybackBus.onCommand = null
     }
   }
 }

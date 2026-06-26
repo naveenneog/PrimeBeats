@@ -10,8 +10,22 @@ export type CarPlaybackState = {
   playing?: boolean;
 };
 
+/** What the phone is playing, mirrored into the car session. */
+export type CarNowPlayingInput = {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  durationMs: number;
+  positionMs: number;
+  playing: boolean;
+  liked: boolean;
+  repeat: boolean;
+};
+
 type CarMediaEvents = {
   onCarPlayback: (state: CarPlaybackState) => void;
+  onCarCommand: (payload: { command: string }) => void;
 };
 
 declare class CarMediaModule extends NativeModule<CarMediaEvents> {
@@ -19,9 +33,11 @@ declare class CarMediaModule extends NativeModule<CarMediaEvents> {
   isSupported(): boolean;
   /** Persist the browseable library snapshot (songs + playlists + smart playlists). */
   setLibrary(json: string): boolean;
-  /** Latest car playback state (for seeding the UI). */
+  /** Mirror the phone's current track into the car session (keeps Auto in sync). */
+  setNowPlaying(state: CarNowPlayingInput): void;
+  /** Latest local car playback state (for seeding the in-app banner). */
   getNowPlaying(): CarPlaybackState | null;
-  /** Forward a transport command (play/pause/playpause/next/previous/stop) to the car service. */
+  /** Forward a transport command (play/pause/playpause/next/previous/stop) to the car. */
   sendCommand(command: string): void;
 }
 

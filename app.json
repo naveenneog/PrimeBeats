@@ -2,7 +2,7 @@
   "expo": {
     "name": "PrimeBeats",
     "slug": "PrimeBeats",
-    "version": "1.10.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.primebeats.app",
-      "versionCode": 11,
+      "versionCode": 12,
       "intentFilters": [
         {
           "action": "SEND",

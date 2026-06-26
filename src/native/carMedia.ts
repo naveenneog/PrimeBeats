@@ -1,10 +1,10 @@
-import type { CarPlaybackState } from '../../modules/carmedia/src/CarMediaModule';
+import type { CarPlaybackState, CarNowPlayingInput } from '../../modules/carmedia/src/CarMediaModule';
 
 /**
  * Crash-proof wrapper around the local `carmedia` native module. Feeds the
  * Android Auto media-browser service a snapshot of songs / playlists / smart
- * playlists, relays car playback state back to the app, and forwards transport
- * commands. Loaded defensively so the app degrades to a no-op without it.
+ * playlists, mirrors phone playback into the car session, relays car playback
+ * state + Auto commands back to the app, and forwards transport commands.
  */
 export type CarTrackLite = { id: string; title: string; artist: string; album: string; uri: string };
 export type CarGroupLite = { id: string; name: string; trackIds: string[] };
@@ -13,14 +13,16 @@ export type CarSnapshot = {
   playlists: CarGroupLite[];
   smart: CarGroupLite[];
 };
-export type { CarPlaybackState };
+export type { CarPlaybackState, CarNowPlayingInput };
 
 type NativeCarMedia = {
   isSupported(): boolean;
   setLibrary(json: string): boolean;
+  setNowPlaying(state: CarNowPlayingInput): void;
   getNowPlaying(): CarPlaybackState | null;
   sendCommand(command: string): void;
   addListener(event: 'onCarPlayback', listener: (s: CarPlaybackState) => void): { remove(): void };
+  addListener(event: 'onCarCommand', listener: (p: { command: string }) => void): { remove(): void };
 };
 
 let native: NativeCarMedia | null = null;
@@ -49,6 +51,15 @@ export const CarMedia = {
     }
   },
 
+  /** Mirror the phone's current track into the car session (proxy sync). */
+  setNowPlaying(state: CarNowPlayingInput): void {
+    try {
+      native?.setNowPlaying(state);
+    } catch {
+      // ignore
+    }
+  },
+
   getNowPlaying(): CarPlaybackState | null {
     try {
       return native?.getNowPlaying() ?? null;
@@ -57,7 +68,7 @@ export const CarMedia = {
     }
   },
 
-  /** play | pause | playpause | next | previous | stop */
+  /** play | pause | playpause | next | previous | stop (controls local car playback) */
   sendCommand(command: string): void {
     try {
       native?.sendCommand(command);
@@ -69,6 +80,16 @@ export const CarMedia = {
   onCarPlayback(listener: (state: CarPlaybackState) => void): () => void {
     try {
       const sub = native?.addListener('onCarPlayback', listener);
+      return () => sub?.remove();
+    } catch {
+      return () => undefined;
+    }
+  },
+
+  /** Commands from Android Auto (while proxying the phone): play/pause/next/previous/seek:<ms>/like/loop/radio/stop. */
+  onCarCommand(listener: (command: string) => void): () => void {
+    try {
+      const sub = native?.addListener('onCarCommand', (p) => listener(p?.command ?? ''));
       return () => sub?.remove();
     } catch {
       return () => undefined;

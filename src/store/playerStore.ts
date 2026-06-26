@@ -10,7 +10,9 @@ import { create } from 'zustand';
 
 import { recommendNext } from '../ml/recommender';
 import type { RepeatMode, Track } from '../types';
+import { CarMedia } from '../native/carMedia';
 import { matchTrackIndex } from '../utils/search';
+import { carSource } from './carSource';
 import { useLibraryStore } from './libraryStore';
 import { useTasteStore } from './tasteStore';
 
@@ -155,6 +157,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const pos = Math.max(0, sec);
     void TrackPlayer.seekTo(pos);
     set({ positionSec: pos });
+    syncCarNowPlaying();
   },
   seekBy: (delta) => {
     void TrackPlayer.seekBy(delta);
@@ -211,6 +214,50 @@ function doPlayFromSearch(query: string): void {
   // playback always starts.
   const index = match >= 0 ? match : Math.floor(Math.random() * library.length);
   void doPlayFrom(library, index);
+}
+
+/** Mirror what the phone is playing into the Android Auto session (proxy sync). */
+function syncCarNowPlaying(): void {
+  // While the car is the active source, it owns the session — don't override it.
+  if (carSource.active) return;
+  const st = usePlayerStore.getState();
+  const track = st.queue[st.currentIndex];
+  if (!track) return;
+  CarMedia.setNowPlaying({
+    id: track.id,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    durationMs: track.durationMs > 0 ? track.durationMs : Math.round(st.durationSec * 1000),
+    positionMs: Math.round(st.positionSec * 1000),
+    playing: st.isPlaying,
+    liked: useTasteStore.getState().isLiked(track.id),
+    repeat: st.repeat !== 'off',
+  });
+}
+
+/** Handle a transport/custom-action command coming from Android Auto. */
+function handleCarCommand(command: string): void {
+  const st = usePlayerStore.getState();
+  const track = st.queue[st.currentIndex];
+  if (command === 'play') st.play();
+  else if (command === 'pause' || command === 'stop') st.pause();
+  else if (command === 'next') st.next();
+  else if (command === 'previous') st.previous();
+  else if (command === 'loop') st.cycleRepeat();
+  else if (command === 'radio') {
+    if (track) st.startRadio(track);
+  } else if (command === 'like') {
+    if (track) {
+      const taste = useTasteStore.getState();
+      if (taste.isLiked(track.id)) taste.unlike(track);
+      else taste.like(track);
+      syncCarNowPlaying();
+    }
+  } else if (command.startsWith('seek:')) {
+    const ms = parseInt(command.slice(5), 10);
+    if (!Number.isNaN(ms)) st.seekTo(ms / 1000);
+  }
 }
 
 async function doReorderQueue(from: number, to: number): Promise<void> {
@@ -331,6 +378,7 @@ async function doCycleRepeat(): Promise<void> {
   const tpMode =
     nextMode === 'one' ? TPRepeatMode.Track : nextMode === 'all' ? TPRepeatMode.Queue : TPRepeatMode.Off;
   await TrackPlayer.setRepeatMode(tpMode);
+  syncCarNowPlaying();
 }
 
 /** In radio mode, append more recommendations as the queue nears its end. */
@@ -364,6 +412,7 @@ function attachListeners(): void {
       isPlaying: event.state === State.Playing,
       isBuffering: event.state === State.Buffering || event.state === State.Loading,
     });
+    syncCarNowPlaying();
   });
 
   TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (event) => {
@@ -416,8 +465,12 @@ function attachListeners(): void {
           track && track.durationMs > 0 ? track.durationMs / 1000 : usePlayerStore.getState().durationSec,
       });
       void maybeExtendRadio();
+      syncCarNowPlaying();
     }
   });
+
+  // Android Auto controls (while the car mirrors phone playback) -> drive RNTP.
+  CarMedia.onCarCommand(handleCarCommand);
 
   // Voice "play <song> from PrimeBeats" (Android Auto / Assistant) when our RNTP
   // session is the active one. The car-side browse service handles the cold path.

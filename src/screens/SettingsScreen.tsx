@@ -12,7 +12,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useTasteStore } from '../store/tasteStore';
 import { colors, radius, spacing } from '../theme';
 
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '2.0.0';
 
 function Row({
   icon,
